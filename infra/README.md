@@ -144,7 +144,8 @@ Run these on the VPS from `~/thesis/infra`. Use `sudo`, or log out and back in o
 | Restore | `sudo ./scripts/restore.sh /var/backups/thesis/<time>` (asks you to type RESTORE) |
 
 | Sample every user action (Phase 2) | `sudo ./scripts/phase2-sample-actions.sh` (to `reports/phase2-samples-<time>/`) |
-| Normalize events from the index | `sudo ./scripts/ueba.sh normalize --indexer --since <ISO time> --out ../data/events.jsonl --geoip ../data/geoip/GeoLite2-City.mmdb` |
+| Normalize events from the index | `sudo ./scripts/ueba.sh normalize --indexer --since <ISO time> --out ../data/events.jsonl --geoip ../data/geoip/dbip-city-lite-2026-10.mmdb` |
+| Download a GeoIP database (DB-IP City Lite) | `sudo ./scripts/update-geoip.sh` (this month) or `sudo ./scripts/update-geoip.sh 2026-10` |
 | Trace sampled actions (LOG-01) | `sudo ./scripts/ueba.sh trace --manifest reports/<sample>/manifest.jsonl --events ../data/events.jsonl` |
 
 **Simulation path (Phase 3).** `https://localhost:8443` on the VPS reaches the same Nextcloud, but there the client IP comes from `X-Sim-Client-IP` and a virtual time from `X-Sim-Time` (ISO 8601 with timezone). It is published on 127.0.0.1 only; the public path ignores both headers, and `verify-phase1.sh` checks this. Caddy's certificate there is from its internal CA, so clients must skip verification or trust that CA. Example:
@@ -197,6 +198,7 @@ infra/                           (~/thesis/infra on the VPS)
 │   ├── backup.sh / restore.sh   INF-11
 │   ├── phase2-sample-actions.sh one of each user action + the log lines it produced
 │   ├── ueba.sh                  run the ueba CLI on the VPS against the local indexer
+│   ├── update-geoip.sh          download a monthly DB-IP City Lite edition into data/geoip/
 │   └── apply-indexer-users.sh   re-apply indexer passwords to an existing volume
 ├── local/                       local test on Docker Desktop (run-local.cmd / stop-local.cmd)
 ├── nextcloud/

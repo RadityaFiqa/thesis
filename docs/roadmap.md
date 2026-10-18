@@ -26,7 +26,7 @@ Phases and milestones come from the PRD (section 9). The week estimates are sugg
 | Phase | Decision | Status |
 |---|---|---|
 | 2 | Index rule matches, not archives; field mapping; join by request id | ✅ decisions 0004, 0005 |
-| 2 | GeoIP database: bundled 2019 GeoLite2, or a current one (DB-IP Lite / GeoLite2 with account) | open (0006) |
+| 2 | GeoIP database | ✅ DB-IP City Lite, monthly, pinned per run (0006) |
 | 2 | Index retention | open; nothing is deleted until decided |
 | 3 | Simulated users, run length, volumes, scenario repetitions | open |
 | 4 | Window length, history warm-up | open |

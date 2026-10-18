@@ -29,7 +29,7 @@ Outputs (git-ignored, on the VPS): `reports/phase2-samples-20261018-125540/` (ma
 | Duplicate raw records | 0 observed; drop-and-count path covered by `test_repeated_raw_lines_are_counted_and_dropped` |
 | Records skipped, all with a reason | login_attempt_precursor 5, not_a_user_action 3, application_log 3, system_actor 1, session_churn 1, share_interaction_duplicate 1 |
 | Missing required fields | none |
-| GeoIP | 15 / 15 resolved; database `GeoLite2-City built 2019-11-12` (see decision 0006) |
+| GeoIP | 15 / 15 resolved; database `GeoLite2-City built 2019-11-12`. Replaced afterwards by DB-IP City Lite 2026-10, which places the same client IP (the VPS) in ID/Jakarta instead of JP (decision 0006) |
 | Wazuh `GeoLocation` on proxy alerts | 16 / 16 since the run started |
 | Phase 1 regression (`verify-phase1.sh`) | 53 pass, 0 fail, 0 warn |
 | Unit tests | 34 pass; layer contract kept; lint clean |
@@ -73,5 +73,5 @@ Earlier runs at 10:50 UTC (13/13, lag p50 0.74 s) and from the sample files (13/
 
 - Lag is measured to the manager's `timestamp`; indexing adds a further delay that this measure doesn't include.
 - The sampled actions come from one synthetic user and one client IP (the VPS itself), so the geography in these samples is not varied.
-- The GeoIP database is from 2019 unless replaced.
+- The GeoIP results in this run come from the 2019 database; later runs use DB-IP City Lite 2026-10.
 - The 2026-10-18 index predates decision 0005, so application-log lines are missing from that one index (still in the log file).

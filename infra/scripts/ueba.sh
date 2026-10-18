@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run the ueba CLI on the VPS from this git checkout, against the local indexer.
 #   sudo ./scripts/ueba.sh normalize --indexer --since 2026-10-18T10:00Z --out ../data/events.jsonl \
-#        --geoip ../data/geoip/GeoLite2-City.mmdb      (copied there by setup.sh)
+#        --geoip ../data/geoip/dbip-city-lite-2026-10.mmdb   (from scripts/update-geoip.sh)
 #   sudo ./scripts/ueba.sh trace --manifest reports/<sample>/manifest.jsonl --events ../data/events.jsonl
 # The indexer password is read from siem/.env at run time and never written elsewhere.
 # The package needs only the Python standard library (python3 >= 3.11).

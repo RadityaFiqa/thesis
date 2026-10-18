@@ -361,20 +361,15 @@ indexer_templates() {
   ok "index template thesis-nextcloud-overrides applied (data.data, data.exception not indexed)"
 }
 
-# GeoIP database for the normalizer (CTX-01): the GeoLite2-City file that ships
-# with the Wazuh indexer image, so the normalizer and Wazuh's own GeoLocation use
-# the same data and nothing is downloaded. MaxMind's licence restricts
-# redistribution: the copy lives in data/ (git-ignored), never in the repository.
+# GeoIP database for the normalizer (CTX-01): DB-IP City Lite, downloaded on
+# purpose with scripts/update-geoip.sh (setup.sh never downloads it by itself).
+# The GeoLite2 file bundled with the Wazuh indexer is from 2019 and is not used
+# (decision 0006).
 geoip_db() {
-  local src=/usr/share/wazuh-indexer/modules/ingest-geoip/GeoLite2-City.mmdb
-  local dst; dst="$(dirname "$DEPLOY_DIR")/data/geoip/GeoLite2-City.mmdb"
-  mkdir -p "$(dirname "$dst")"
-  if [[ -f "$dst" && "$(host_md5 "$dst")" == "$(ctr_md5 siem-wazuh.indexer-1 "$src")" ]]; then
-    ok "GeoIP database is current (${dst#"$(dirname "$DEPLOY_DIR")"/})"; return
-  fi
-  docker cp "siem-wazuh.indexer-1:$src" "$dst" >/dev/null
-  chmod 644 "$dst"
-  ok "GeoIP database copied from the indexer image to ${dst#"$(dirname "$DEPLOY_DIR")"/}"
+  local latest
+  latest=$(ls "$(dirname "$DEPLOY_DIR")"/data/geoip/dbip-city-lite-*.mmdb 2>/dev/null | sort | tail -1 || true)
+  if [[ -n "$latest" ]]; then ok "GeoIP database present: data/geoip/$(basename "$latest")"
+  else warn "no GeoIP database; run: sudo ./scripts/update-geoip.sh"; fi
 }
 
 # ---------------------------------------------------------------- Nextcloud

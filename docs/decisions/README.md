@@ -26,6 +26,6 @@ What this costs, what it enables, what to watch.
 | [0003](0003-audit-data-mapping.md) | Index template mapping `data.data` as an object (superseded by 0005) |
 | [0004](0004-ingestion-and-normalization.md) | Ingestion through rules, normalization in Python, joined by request id |
 | [0005](0005-free-form-json-not-indexed.md) | Free-form JSON subtrees stored but not indexed |
-| [0006](0006-geoip-source.md) | GeoIP: own lookup with a recorded database, plus Wazuh GeoLocation for search |
+| [0006](0006-geoip-source.md) | GeoIP: own lookup with DB-IP City Lite, plus Wazuh GeoLocation for search |
 | [0007](0007-safe-config-deploys.md) | Detect stale bind mounts and validate Wazuh rules before reloading |
 | [0008](0008-simulation-path.md) | Simulation path: injected client IP and virtual time on a local-only listener |

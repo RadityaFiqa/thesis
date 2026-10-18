@@ -62,3 +62,7 @@ python -m venv .venv
 | Local test stack (Docker Desktop) | `infra\local\run-local.cmd` / `infra\local\stop-local.cmd` |
 
 Operations, backup/restore and troubleshooting: [infra/README.md](infra/README.md).
+
+## Data attribution
+
+IP Geolocation by [DB-IP](https://db-ip.com) (DB-IP City Lite, CC BY 4.0). The database file itself is not in this repository; `infra/scripts/update-geoip.sh` downloads it.

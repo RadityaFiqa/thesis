@@ -76,10 +76,10 @@ Every input event ends up exactly once as output, merged duplicate, or supersede
 
 ## GeoIP (CTX-01, CTX-02)
 
-- Database: MaxMind GeoLite2-City as shipped in the `wazuh/wazuh-indexer:4.14.9` image, copied by `setup.sh` to `data/geoip/` (git-ignored; MaxMind's licence restricts redistribution). `geo.provider` records the database type and build date on every event. **That database was built on 2019-11-12**; see decision 0006 for replacing it with a current one.
+- Database: DB-IP City Lite, one monthly edition per file in `data/geoip/` (git-ignored), downloaded with `infra/scripts/update-geoip.sh`; current 2026-10. `geo.provider` records the database type, build date and file on every event (decision 0006). IP Geolocation by DB-IP (https://db-ip.com), CC BY 4.0.
 - Private, loopback and link-local IPs are never looked up: `private`. No IP: `missing`. Not an IP: `invalid`. Public but unknown to the database: `not_found`. Only `resolved` carries a location.
 - A location is the database's estimate for an IP. It is not proof of where a person is: VPNs, proxies, NAT and mobile networks limit it.
-- For analysts, Caddy also logs the client IP as `srcip`, which Wazuh's ingest pipeline turns into `GeoLocation` for dashboard maps. The normalized dataset uses its own lookup above.
+- For analysts, Caddy also logs the client IP as `srcip`, which Wazuh's ingest pipeline turns into `GeoLocation` for dashboard maps. That uses the indexer's bundled 2019 GeoLite2, so maps can differ; the normalized dataset uses its own lookup above.
 
 ## Known limits
 

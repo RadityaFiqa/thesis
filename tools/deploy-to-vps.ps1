@@ -38,10 +38,11 @@ Write-Host "[2/3] Copying to ${Vps}:~/$RemoteDir"
 & scp -o BatchMode=yes $Pkg "${Vps}:~/infra.tar.gz"
 if ($LASTEXITCODE -ne 0) { throw 'scp failed (is SSH key login set up?)' }
 
+# Normalize line endings in the unpacked package (not in ~/deploy, which holds root-only secrets)
 $remote = "set -e; rm -rf ~/infra.new; mkdir ~/infra.new; tar xzf ~/infra.tar.gz -C ~/infra.new; " +
-          "mkdir -p ~/$RemoteDir; cp -r ~/infra.new/. ~/$RemoteDir/; rm -rf ~/infra.new; " +
-          "find ~/$RemoteDir -type f \( -name '*.sh' -o -name 'Caddyfile' -o -name '*.yml' -o -name '*.conf' -o -name '*.xml' \) -exec sed -i 's/\r$//' {} +; " +
-          "chmod 755 ~/$RemoteDir/setup.sh ~/$RemoteDir/scripts/*.sh"
+          "find ~/infra.new -type f \( -name '*.sh' -o -name 'Caddyfile' -o -name '*.yml' -o -name '*.conf' -o -name '*.xml' -o -name '*.example' -o -name '*.template' \) -exec sed -i 's/\r$//' {} +; " +
+          "chmod 755 ~/infra.new/setup.sh ~/infra.new/scripts/*.sh; " +
+          "mkdir -p ~/$RemoteDir; cp -r ~/infra.new/. ~/$RemoteDir/; rm -rf ~/infra.new"
 & ssh -o BatchMode=yes $Vps $remote
 if ($LASTEXITCODE -ne 0) { throw 'unpacking on the VPS failed' }
 

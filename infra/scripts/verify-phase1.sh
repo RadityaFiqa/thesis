@@ -108,7 +108,7 @@ PUB_CODE=$(curl -4 -s -o /tmp/thesis-status.json -w '%{http_code}' --max-time 20
 if [[ "$PUB_CODE" == "200" ]] && jq -e '.installed == true' /tmp/thesis-status.json >/dev/null 2>&1; then
   pass "https://$NCD/status.php -> 200, installed, version $(jq -r .versionstring /tmp/thesis-status.json)"
   CURL=(curl -4 -s --max-time 60); BASE="https://$NCD"; VIA_CF=1
-  if curl -4 -sI --max-time 20 "https://$NCD/status.php" | grep -qi '^cf-ray:'; then pass "served through Cloudflare (cf-ray header present)"; fi
+  if curl -4 -sI --max-time 20 "https://$NCD/status.php" | grep -i '^cf-ray:' >/dev/null; then pass "served through Cloudflare (cf-ray header present)"; fi
 else
   fail "https://$NCD via public DNS returned HTTP '${PUB_CODE}' (check Cloudflare SSL/TLS mode = Full, and ports 80/443 in the provider firewall)"
   CURL=(curl -4 -s -k --max-time 60 --resolve "$NCD:443:127.0.0.1"); BASE="https://$NCD"; VIA_CF=0
@@ -132,7 +132,7 @@ section "Logging and cron configuration (INF-09, INF-10)"
 chk_sys log_type file
 chk_sys logfile /var/log/nextcloud/nextcloud.log
 chk_sys logfile_audit /var/log/nextcloud/audit.log
-occ app:list --enabled 2>/dev/null | grep -q 'admin_audit' && pass "admin_audit app enabled" || fail "admin_audit app not enabled"
+occ app:list --enabled 2>/dev/null | grep 'admin_audit' >/dev/null && pass "admin_audit app enabled" || fail "admin_audit app not enabled"
 MODE=$(occ config:app:get core backgroundjobs_mode 2>/dev/null)
 [[ "$MODE" == "cron" ]] && pass "background jobs mode = cron" || fail "background jobs mode = '$MODE'"
 LAST=$(occ config:app:get core lastcron 2>/dev/null || echo 0); NOW=$(date +%s)
@@ -223,7 +223,7 @@ done
 agent_list() { siemc exec -T wazuh.manager /var/ossec/bin/agent_control -l 2>/dev/null; }
 AGENT_ID=$(ncc exec -T wazuh-agent awk '{print $1; exit}' /var/ossec/etc/client.keys 2>/dev/null)
 NAMED=$(agent_list | grep -c "Name: $AGENT_NAME,")
-if agent_list | grep "Name: $AGENT_NAME," | grep -q 'Active'; then pass "agent '$AGENT_NAME' (ID $AGENT_ID) is Active on the manager"
+if agent_list | grep "Name: $AGENT_NAME," | grep 'Active' >/dev/null; then pass "agent '$AGENT_NAME' (ID $AGENT_ID) is Active on the manager"
 else fail "agent '$AGENT_NAME' not Active: $(agent_list | grep "Name: $AGENT_NAME," | head -1)"; fi
 [[ "$NAMED" == "1" ]] && pass "exactly one agent named $AGENT_NAME" || warn "$NAMED agents named $AGENT_NAME"
 
@@ -271,8 +271,8 @@ if [[ "$RECREATE" == "1" ]]; then
                                                        || fail "indexed events $BEFORE_COUNT -> $AFTER_COUNT"
   NEW_ID=$(ncc exec -T wazuh-agent awk '{print $1; exit}' /var/ossec/etc/client.keys 2>/dev/null)
   [[ -n "$NEW_ID" && "$NEW_ID" == "$AGENT_ID" ]] && pass "agent identity kept (ID $NEW_ID)" || fail "agent ID changed: $AGENT_ID -> $NEW_ID"
-  for i in $(seq 1 12); do agent_list | grep "Name: $AGENT_NAME," | grep -q Active && break; sleep 5; done
-  agent_list | grep "Name: $AGENT_NAME," | grep -q Active && pass "agent reconnected without manual registration" || fail "agent not Active after recreation"
+  for i in $(seq 1 12); do agent_list | grep "Name: $AGENT_NAME," | grep Active >/dev/null && break; sleep 5; done
+  agent_list | grep "Name: $AGENT_NAME," | grep Active >/dev/null && pass "agent reconnected without manual registration" || fail "agent not Active after recreation"
   [[ "$(agent_list | grep -c "Name: $AGENT_NAME,")" == "1" ]] && pass "no duplicate agent identity" || fail "duplicate agent identities"
 else
   section "Persistence across container recreation (INF-04, INF-08)"

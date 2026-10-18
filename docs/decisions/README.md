@@ -23,4 +23,8 @@ What this costs, what it enables, what to watch.
 |---|---|
 | [0001](0001-two-compose-projects.md) | Two independent Compose projects connected through host-published ports |
 | [0002](0002-bridge-only-siem-ports.md) | Publish SIEM ports on the Docker bridge address, not the public interface |
-| [0003](0003-audit-data-mapping.md) | Index template mapping `data.data` as an object for Nextcloud audit events |
+| [0003](0003-audit-data-mapping.md) | Index template mapping `data.data` as an object (superseded by 0005) |
+| [0004](0004-ingestion-and-normalization.md) | Ingestion through rules, normalization in Python, joined by request id |
+| [0005](0005-free-form-json-not-indexed.md) | Free-form JSON subtrees stored but not indexed |
+| [0006](0006-geoip-source.md) | GeoIP: own lookup with a recorded database, plus Wazuh GeoLocation for search |
+| [0007](0007-safe-config-deploys.md) | Detect stale bind mounts and validate Wazuh rules before reloading |

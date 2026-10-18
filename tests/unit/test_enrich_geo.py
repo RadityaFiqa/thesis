@@ -21,8 +21,12 @@ class FakeLookup:
 
 def event(ip):
     return NormalizedEvent(
-        event_time=T0, ingest_time=T0, action=Action.LOGIN, outcome=Outcome.SUCCESS,
-        provenance=Provenance(SourceSystem.NEXTCLOUD_AUDIT, "doc", None), client_ip=ip,
+        event_time=T0,
+        ingest_time=T0,
+        action=Action.LOGIN,
+        outcome=Outcome.SUCCESS,
+        provenance=Provenance(SourceSystem.NEXTCLOUD_AUDIT, "doc", None),
+        client_ip=ip,
     )
 
 
@@ -34,8 +38,9 @@ def test_private_and_missing_ips_are_never_looked_up():
 
 
 def test_public_ip_is_resolved_or_marked_not_found():
-    jakarta = GeoContext(status=GeoStatus.RESOLVED, country="ID", city="Jakarta",
-                         provider=FakeLookup.provider)
+    jakarta = GeoContext(
+        status=GeoStatus.RESOLVED, country="ID", city="Jakarta", provider=FakeLookup.provider
+    )
     lookup = FakeLookup({"36.86.63.1": jakarta})
     found, missing = enrich_geo([event("36.86.63.1"), event("8.8.8.8")], lookup)
     assert found.geo == jakarta

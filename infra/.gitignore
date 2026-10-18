@@ -5,3 +5,6 @@ siem/config/wazuh_indexer/internal_users.yml
 siem/config/wazuh_dashboard/wazuh.yml
 nextcloud/caddy/certs/*.pem
 reports/
+
+# Phase 2 sampler account password
+.p2-sampler.pass

@@ -21,8 +21,15 @@
 		}
 		format json
 	}
+	# Same UUID as Nextcloud's reqId (sent upstream as X-Request-Id), for joining logs
+	log_append request_id {http.request.uuid}
+	# Wazuh's ingest pipeline adds GeoLocation for data.srcip, so name the client IP that way
+	log_append srcip {client_ip}
 
 	header Strict-Transport-Security "max-age=31536000;"
+	# Returned to clients so the simulator can record which requests it made (ground truth).
+	# "?" = only if Nextcloud didn't already return its reqId (the same value)
+	header ?X-Request-Id {http.request.uuid}
 
 	redir /.well-known/carddav /remote.php/dav/ 301
 	redir /.well-known/caldav /remote.php/dav/ 301
@@ -31,6 +38,8 @@
 		# Overwrite rather than append, so Nextcloud sees exactly the resolved client IP
 		header_up X-Forwarded-For {client_ip}
 		header_up X-Real-IP {client_ip}
+		# Overwrite any client value; Apache turns it into Nextcloud's reqId
+		header_up X-Request-Id {http.request.uuid}
 	}
 }
 

@@ -16,7 +16,9 @@ Undergraduate thesis: collect Nextcloud user activity, detect behavioral anomali
 │   ├── prd.md            requirements (source of truth)
 │   ├── architecture.md   system and code structure
 │   ├── roadmap.md        phases M1–M7 and status
-│   └── decisions/        one short record per design decision (ADR)
+│   ├── decisions/        one short record per design decision (ADR)
+│   ├── data/             field mapping (normalized event schema)
+│   └── evidence/         per-phase results for the thesis
 ├── infra/                Phase 1: Docker Compose stacks, setup and ops scripts (deployed to the VPS)
 ├── src/ueba/             Phases 2–7: Python package, clean architecture
 │   ├── domain/           pure data and rules (events, geo, detections)

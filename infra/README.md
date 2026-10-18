@@ -143,6 +143,12 @@ Run these on the VPS from `~/thesis/infra`. Use `sudo`, or log out and back in o
 | Backup | `sudo ./scripts/backup.sh` (to `/var/backups/thesis/<time>/`) |
 | Restore | `sudo ./scripts/restore.sh /var/backups/thesis/<time>` (asks you to type RESTORE) |
 
+| Sample every user action (Phase 2) | `sudo ./scripts/phase2-sample-actions.sh` (to `reports/phase2-samples-<time>/`) |
+| Normalize events from the index | `sudo ./scripts/ueba.sh normalize --indexer --since <ISO time> --out ../data/events.jsonl --geoip ../data/geoip/GeoLite2-City.mmdb` |
+| Trace sampled actions (LOG-01) | `sudo ./scripts/ueba.sh trace --manifest reports/<sample>/manifest.jsonl --events ../data/events.jsonl` |
+
+**Changing configuration.** After editing anything mounted into a container (Caddyfile, `local_rules.xml`, `ossec.conf`, ...), run `sudo ./setup.sh`, not `docker compose restart`. Containers keep reading the old copy of a replaced file, and the Wazuh manager copies its config only when it is created. `setup.sh` detects both and recreates only what changed. It also tests new Wazuh rules first and refuses to load ones that would stop the manager (`docs/decisions/0007-safe-config-deploys.md`).
+
 **Never run `docker compose down -v`, `docker volume rm` or `docker system prune --volumes`.** They delete the data (PRD: data preservation). `docker compose down` without `-v` is safe.
 
 **Upgrades.** Change one pinned image tag at a time, then run `docker compose pull && docker compose up -d`. Take a backup first. Nextcloud can only move up one major version at a time.
@@ -155,7 +161,7 @@ Run these on the VPS from `~/thesis/infra`. Use `sudo`, or log out and back in o
   - `/var/log/nextcloud/audit.log` (admin_audit)
   - `/var/log/nextcloud/nextcloud.log` (application, `loglevel` 1, UTC timestamps)
   - `/var/log/caddy/access.log` (method, URI, status, bytes, client IP, user agent)
-- **Indexing.** Wazuh indexes only events that match a rule. `siem/config/wazuh_cluster/local_rules.xml` contains level-3 smoke rules (100100–100102) so every Nextcloud and proxy event is searchable. Phase 2 (LOG-02 to LOG-05) should decide the final approach: field mapping, `logall_json`/archives, retention.
+- **Indexing.** Wazuh indexes only events that match a rule at level 3 or higher. `siem/config/wazuh_cluster/local_rules.xml` has a parent rule per log (audit 100100, application 100200, proxy 100300), so every user action stays searchable (LOG-02), plus child rules naming each action (`nc_auth_success`, `nc_file_write`, `nc_share`, `nc_http_failure`, ...). Internal "Cache entry" audit lines are dropped (level 0). See `docs/decisions/0004-ingestion-and-normalization.md`.
 - **Index template `thesis-nextcloud-overrides`.** Nextcloud audit lines carry a nested `data` object, while the Wazuh template maps `data.data` as keyword. Without the override the indexer rejects every audit alert. `setup.sh` applies it, but it only affects daily indices created afterwards (see `docs/decisions/0003-audit-data-mapping.md`).
 - **Resource choices for 2 vCPU / 8 GB:**
   - indexer heap 1 GB
@@ -185,10 +191,13 @@ infra/                           (~/thesis/infra on the VPS)
 ├── scripts/
 │   ├── verify-phase1.sh         PRD section 10 checks, writes reports/
 │   ├── backup.sh / restore.sh   INF-11
+│   ├── phase2-sample-actions.sh one of each user action + the log lines it produced
+│   ├── ueba.sh                  run the ueba CLI on the VPS against the local indexer
 │   └── apply-indexer-users.sh   re-apply indexer passwords to an existing volume
 ├── local/                       local test on Docker Desktop (run-local.cmd / stop-local.cmd)
 ├── nextcloud/
 │   ├── docker-compose.yml, .env.example
+│   ├── apache/thesis-request-id.conf   proxy request id becomes Nextcloud's reqId
 │   ├── caddy/Caddyfile, caddy/certs/
 │   ├── hooks/before-starting/10-thesis-config.sh   logging, audit, cron (idempotent, every start)
 │   └── wazuh-agent/ossec.conf

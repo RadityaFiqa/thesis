@@ -1,6 +1,6 @@
 # 0003. Map `data.data` as an object for Nextcloud audit events
 
-Date: 2026-10-18 · Status: accepted
+Date: 2026-10-18 · Status: superseded by [0005](0005-free-form-json-not-indexed.md)
 
 ## Context
 Nextcloud `admin_audit` lines contain a nested object, `"data": {"app": "admin_audit"}`. Wazuh puts decoded JSON under `data.*`, so the field becomes `data.data`. The stock `wazuh-alerts` template maps that as `keyword`, so the indexer rejected every audit alert with `mapper_parsing_exception`.

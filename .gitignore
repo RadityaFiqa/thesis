@@ -6,9 +6,9 @@ __pycache__/
 .ruff_cache/
 
 # Build output and experiment data (large, regenerable, may contain test identities)
-dist/
-data/
-artifacts/
+/dist/
+/data/
+/artifacts/
 
 # Local test on Docker Desktop: generated secrets and transcripts
 *.env.local

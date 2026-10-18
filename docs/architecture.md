@@ -46,7 +46,7 @@ entrypoints ──> adapters ──> application ──> domain
 
 | Phase | Domain | Application | Adapters |
 |---|---|---|---|
-| 2 Collection | `events`, `geo` | `normalize`, `enrich_geo` ✅ | `wazuh_indexer`, `maxmind_geo` |
+| 2 Collection | `events` ✅, `geo` ✅ | `normalize` ✅, `enrich_geo` ✅, `trace` ✅, `quality` ✅ | `nextcloud_logs` ✅, `wazuh_indexer` ✅, `jsonl_store` ✅, `mmdb_geo` ✅ |
 | 3 Simulation | `scenarios`, ground-truth records | `simulate` | `nextcloud_dav`, ground-truth store |
 | 4 Features | `features` (window, definitions) | `build_features` | `parquet_store` |
 | 5 Model | model metadata | `train`, `calibrate` | model registry (files) |

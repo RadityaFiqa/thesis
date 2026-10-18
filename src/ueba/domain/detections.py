@@ -35,7 +35,7 @@ class Detection:
     risk: float
     severity: Severity
     created_at: datetime
-    evidence: tuple[str, ...]          # human-readable contextual reasons
+    evidence: tuple[str, ...]  # human-readable contextual reasons
     source_event_refs: tuple[str, ...]
 
     def __post_init__(self) -> None:
@@ -45,6 +45,13 @@ class Detection:
     @property
     def detection_id(self) -> str:
         """Stable id: the same user, window and model always give the same id (DET-02)."""
-        key = "|".join((self.user_id, self.window_start.isoformat(),
-                        self.window_end.isoformat(), self.model_version, self.feature_version))
+        key = "|".join(
+            (
+                self.user_id,
+                self.window_start.isoformat(),
+                self.window_end.isoformat(),
+                self.model_version,
+                self.feature_version,
+            )
+        )
         return hashlib.sha256(key.encode()).hexdigest()[:32]

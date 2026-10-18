@@ -75,6 +75,7 @@ services:
       - nc_data:/var/www/html/data
       - nc_logs:/var/log/nextcloud
       - ./hooks/before-starting:/docker-entrypoint-hooks.d/before-starting:ro
+      - ./apache/thesis-request-id.conf:/etc/apache2/conf-enabled/thesis-request-id.conf:ro
     healthcheck:
       test: ["CMD", "php", "-r", "$$s = json_decode(@file_get_contents('http://localhost/status.php')); exit(($$s && $$s->installed && !$$s->maintenance) ? 0 : 1);"]
       interval: 30s

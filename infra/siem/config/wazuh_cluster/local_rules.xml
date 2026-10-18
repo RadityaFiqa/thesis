@@ -1,11 +1,16 @@
 <!--
-  Thesis local rules (Phase 1 smoke rules).
-  Wazuh only indexes events that match a rule, so these level-3 rules make every
-  Nextcloud audit, application and proxy event searchable in the dashboard.
-  Phase 2 (LOG-02..LOG-05) revisits this: field mapping, archives, volume.
+  Thesis local rules (Phase 2, LOG-01/LOG-02).
+
+  Wazuh indexes only events that match a rule at level >= 3, so every user
+  action stays searchable (normal activity included, LOG-02). The parent rules
+  catch everything from each log; child rules name the action so analysts can
+  filter by it. The authoritative mapping for analysis is the Python normalizer
+  (src/ueba/adapters/nextcloud_logs.py); these rules mirror it for search.
+  Message patterns were taken from real samples (infra/scripts/phase2-sample-actions.sh).
 -->
 <group name="nextcloud,thesis,">
 
+  <!-- ===================================================== audit.log (admin_audit) -->
   <rule id="100100" level="3">
     <decoded_as>json</decoded_as>
     <location>/var/log/nextcloud/audit.log</location>
@@ -13,18 +18,121 @@
     <group>nextcloud_audit,</group>
   </rule>
 
-  <rule id="100101" level="3">
+  <!-- Internal file-cache bookkeeping, not a user action: not indexed (level 0) -->
+  <rule id="100101" level="0">
+    <if_sid>100100</if_sid>
+    <field name="message" type="pcre2">^Cache entry (inserted|updated|removed)</field>
+    <description>Nextcloud audit: internal cache event (dropped)</description>
+  </rule>
+
+  <rule id="100110" level="3">
+    <if_sid>100100</if_sid>
+    <field name="message" type="pcre2">^Login successful: </field>
+    <description>Nextcloud: authentication succeeded for $(message)</description>
+    <group>nextcloud_audit,nc_auth_success,authentication_success,</group>
+  </rule>
+
+  <rule id="100111" level="5">
+    <if_sid>100100</if_sid>
+    <field name="message" type="pcre2">^Login failed: </field>
+    <description>Nextcloud: authentication failed, $(message)</description>
+    <group>nextcloud_audit,nc_auth_failure,authentication_failed,</group>
+  </rule>
+
+  <!-- Wazuh's built-in rule 2501 ("User authentication failure") claims "Login failed"
+       lines before 100100 sees them. Re-attach them to the Nextcloud groups. -->
+  <rule id="100114" level="5">
+    <if_sid>2501</if_sid>
+    <location>/var/log/nextcloud/audit.log</location>
+    <description>Nextcloud: authentication failed, $(message)</description>
+    <group>nextcloud_audit,nc_auth_failure,authentication_failed,</group>
+  </rule>
+
+  <rule id="100112" level="3">
+    <if_sid>100100</if_sid>
+    <field name="message" type="pcre2">^Login attempt: </field>
+    <description>Nextcloud: authentication attempt, $(message)</description>
+    <group>nextcloud_audit,nc_auth_attempt,</group>
+  </rule>
+
+  <rule id="100113" level="3">
+    <if_sid>100100</if_sid>
+    <field name="message" type="pcre2">^Logout occurred</field>
+    <description>Nextcloud: logout</description>
+    <group>nextcloud_audit,nc_logout,</group>
+  </rule>
+
+  <rule id="100120" level="3">
+    <if_sid>100100</if_sid>
+    <field name="message" type="pcre2">^File with id "\d+" (created|written to): </field>
+    <description>Nextcloud: file written, $(message)</description>
+    <group>nextcloud_audit,nc_file_write,</group>
+  </rule>
+
+  <rule id="100121" level="3">
+    <if_sid>100100</if_sid>
+    <field name="message" type="pcre2">^File with id "\d+" accessed: </field>
+    <description>Nextcloud: file accessed, $(message)</description>
+    <group>nextcloud_audit,nc_file_access,</group>
+  </rule>
+
+  <rule id="100122" level="3">
+    <if_sid>100100</if_sid>
+    <field name="message" type="pcre2">^File with id "\d+" deleted: </field>
+    <description>Nextcloud: file deleted, $(message)</description>
+    <group>nextcloud_audit,nc_file_delete,</group>
+  </rule>
+
+  <rule id="100123" level="3">
+    <if_sid>100100</if_sid>
+    <field name="message" type="pcre2">^File renamed with id </field>
+    <description>Nextcloud: file renamed, $(message)</description>
+    <group>nextcloud_audit,nc_file_rename,</group>
+  </rule>
+
+  <rule id="100124" level="3">
+    <if_sid>100100</if_sid>
+    <field name="message" type="pcre2">has been shared|^Interaction .*ShareAction</field>
+    <description>Nextcloud: share, $(message)</description>
+    <group>nextcloud_audit,nc_share,</group>
+  </rule>
+
+  <!-- ===================================================== nextcloud.log (application) -->
+  <rule id="100200" level="3">
     <decoded_as>json</decoded_as>
     <location>/var/log/nextcloud/nextcloud.log</location>
     <description>Nextcloud application: $(message)</description>
     <group>nextcloud_app,</group>
   </rule>
 
-  <rule id="100102" level="3">
+  <rule id="100201" level="6">
+    <if_sid>100200</if_sid>
+    <field name="message" type="pcre2">^Bruteforce attempt from </field>
+    <description>Nextcloud: brute-force protection triggered, $(message)</description>
+    <group>nextcloud_app,nc_bruteforce,</group>
+  </rule>
+
+  <rule id="100202" level="5">
+    <if_sid>2501</if_sid>
+    <location>/var/log/nextcloud/nextcloud.log</location>
+    <description>Nextcloud application: authentication failed, $(message)</description>
+    <group>nextcloud_app,nc_auth_failure,authentication_failed,</group>
+  </rule>
+
+  <!-- ===================================================== caddy access.log (proxy) -->
+  <rule id="100300" level="3">
     <decoded_as>json</decoded_as>
     <location>/var/log/caddy/access.log</location>
     <description>Proxy access: $(request.method) $(request.uri) -> $(status)</description>
     <group>nextcloud_proxy,</group>
+  </rule>
+
+  <rule id="100301" level="4">
+    <if_sid>100300</if_sid>
+    <!-- "status" is a static field in Wazuh: match it with <status>, not <field> -->
+    <status type="pcre2">^[45]\d\d$</status>
+    <description>Proxy access failed: $(request.method) $(request.uri) -> $(status)</description>
+    <group>nextcloud_proxy,nc_http_failure,</group>
   </rule>
 
 </group>

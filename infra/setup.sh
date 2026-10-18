@@ -73,7 +73,7 @@ EOF
   fi
   systemctl enable --now docker >/dev/null 2>&1 || true
 
-  if [[ -n "${SUDO_USER:-}" && "$SUDO_USER" != "root" ]] && ! id -nG "$SUDO_USER" | grep -qw docker; then
+  if [[ -n "${SUDO_USER:-}" && "$SUDO_USER" != "root" ]] && ! id -nG "$SUDO_USER" | grep -w docker >/dev/null; then
     usermod -aG docker "$SUDO_USER"
     ok "added $SUDO_USER to the docker group (log out and back in to use docker without sudo)"
   fi
@@ -81,8 +81,9 @@ EOF
 
 host_packages() {
   log "Helper packages"
-  apt-get install -yq python3 python3-bcrypt jq curl >/dev/null
-  ok "python3-bcrypt, jq, curl"
+  # python3-maxminddb: GeoIP lookups in the ueba normalizer (scripts/ueba.sh)
+  apt-get install -yq python3 python3-bcrypt python3-maxminddb jq curl >/dev/null
+  ok "python3-bcrypt, python3-maxminddb, jq, curl"
 }
 
 kernel_and_swap() {
@@ -243,7 +244,7 @@ siem_certs() {
 
 indexer_auth_ok() {
   curl -sk -o /dev/null -w '%{http_code}' -u "admin:$(env_get "$SIEM_DIR/.env" INDEXER_PASSWORD)" \
-    https://127.0.0.1:9200/_cluster/health 2>/dev/null | grep -q '^200$'
+    https://127.0.0.1:9200/_cluster/health 2>/dev/null | grep '^200$' >/dev/null
 }
 
 siem_up() {
@@ -259,7 +260,7 @@ siem_up() {
     if indexer_auth_ok; then printf '\n'; ok "indexer is up and accepts the admin password"; return; fi
     # After ~2 minutes, if the security index still isn't initialized, initialize it once
     if (( i >= 24 && initialized_once == 0 )) && \
-       curl -sk https://127.0.0.1:9200/ 2>/dev/null | grep -qi 'not yet initialized\|not initialized'; then
+       curl -sk https://127.0.0.1:9200/ 2>/dev/null | grep -i 'not yet initialized\|not initialized' >/dev/null; then
       printf '\n'; warn "security index not initialized; running securityadmin"
       "$DEPLOY_DIR/scripts/apply-indexer-users.sh" || true
       initialized_once=1
@@ -272,23 +273,115 @@ siem_up() {
   die "indexer not ready; check: cd siem && docker compose logs wazuh.indexer | tail -50"
 }
 
-# Nextcloud's audit log carries a nested "data" object, which the Wazuh template
-# maps as data.data: keyword, so the indexer rejects every audit alert. This
-# higher-order template maps it as an object (applies to newly created daily indices).
+# A single-file bind mount pins the file's inode when the container is created.
+# git pull, sed -i and most editors replace a file by renaming a new one into
+# place, so the running container keeps seeing the OLD content, and docker
+# compose up -d doesn't notice (the compose config is unchanged). Compare every
+# bind-mounted file on the host with what the container sees, and recreate the
+# services that are stale.
+host_md5() { md5sum < "$1" | cut -d' ' -f1; }
+ctr_md5()  { docker exec "$1" cat "$2" 2>/dev/null | md5sum | cut -d' ' -f1; }
+
+recreate_stale_mounts() {   # recreate_stale_mounts <project dir>
+  local dir="$1" ctr svc src dst stale=()
+  for ctr in $(cd "$dir" && docker compose ps -q); do
+    svc=$(docker inspect -f '{{index .Config.Labels "com.docker.compose.service"}}' "$ctr")
+    while IFS=$'\t' read -r src dst; do
+      [[ -f "$src" ]] || continue
+      if [[ "$(host_md5 "$src")" != "$(ctr_md5 "$ctr" "$dst")" ]]; then
+        warn "$svc sees an old copy of ${src#"$DEPLOY_DIR"/}"
+        stale+=("$svc"); break
+      fi
+    done < <(docker inspect -f '{{range .Mounts}}{{if eq .Type "bind"}}{{.Source}}{{"\t"}}{{.Destination}}{{"\n"}}{{end}}{{end}}' "$ctr")
+  done
+  if (( ${#stale[@]} )); then
+    (cd "$dir" && docker compose up -d --force-recreate "${stale[@]}")
+    ok "recreated ${stale[*]} to pick up changed files"
+  else
+    ok "$(basename "$dir"): all mounted files are current"
+  fi
+}
+
+# The manager copies /wazuh-config-mount into /var/ossec only when its container
+# is created (on a plain restart its init script fails before the copy). And a
+# rule file analysisd can't load stops the whole manager. So: if the rules on the
+# host differ from the live ones, test them inside the running manager first
+# (analysisd -t only reads files; the running daemon keeps its loaded rules),
+# roll back on failure, and only then let the manager be recreated.
+validate_manager_rules() {
+  local host_rules="$SIEM_DIR/config/wazuh_cluster/local_rules.xml"
+  local live; live=$(ctr_md5 siem-wazuh.manager-1 /var/ossec/etc/rules/local_rules.xml)
+  if [[ "$(host_md5 "$host_rules")" == "$live" ]]; then ok "manager rules are current"; return; fi
+  (cd "$SIEM_DIR" && docker compose cp "$host_rules" wazuh.manager:/tmp/candidate_rules.xml) >/dev/null
+  local test_out
+  if ! test_out=$(cd "$SIEM_DIR" && docker compose exec -T wazuh.manager sh -c '
+        R=/var/ossec/etc/rules/local_rules.xml
+        cp -p "$R" /tmp/local_rules.xml.bak
+        cp /tmp/candidate_rules.xml "$R" && chown wazuh:wazuh "$R"
+        if /var/ossec/bin/wazuh-analysisd -t >/tmp/rules-test.log 2>&1; then exit 0; fi
+        cp -p /tmp/local_rules.xml.bak "$R"; grep -E "ERROR|CRITICAL" /tmp/rules-test.log | head -5; exit 1'); then
+    printf '%s\n' "$test_out" >&2
+    die "local_rules.xml does not load; the running manager was left untouched"
+  fi
+  ok "changed rules load cleanly (wazuh-analysisd -t)"
+  # The live file now holds the new rules but the daemon still runs the old ones;
+  # force the recreate even if the mount happens to be current.
+  (cd "$SIEM_DIR" && docker compose up -d --force-recreate wazuh.manager)
+  ok "recreated wazuh.manager to load the new rules"
+}
+
+wait_for_manager() {
+  local i
+  local status
+  for i in $(seq 1 60); do
+    # wazuh-control status exits 1 whenever any daemon is off, including ones that
+    # are disabled on purpose (maild, agentlessd, ...), so check its output instead
+    status=$(cd "$SIEM_DIR" && docker compose exec -T wazuh.manager /var/ossec/bin/wazuh-control status 2>/dev/null || true)
+    if [[ "$status" == *"wazuh-analysisd is running"* ]]; then ok "manager is running"; return; fi
+    sleep 3
+  done
+  die "wazuh-analysisd not running; check: cd siem && docker compose logs wazuh.manager | tail -50"
+}
+
+# Nextcloud's logs carry free-form JSON under "data" (object in audit lines, an
+# empty array in some application lines) and "exception" (traces whose argument
+# types vary). Any type the indexer guesses for them rejects the other shapes, and
+# rejected alerts vanish silently. These subtrees are stored but not indexed
+# ("enabled": false), so every shape is accepted; the raw line stays in full_log.
+# Applies to daily indices created after it is installed (decision record 0005).
 indexer_templates() {
   local code
   code=$(curl -sk -o /dev/null -w '%{http_code}' -u "admin:$(env_get "$SIEM_DIR/.env" INDEXER_PASSWORD)" \
     -H 'Content-Type: application/json' -X PUT https://127.0.0.1:9200/_template/thesis-nextcloud-overrides \
     -d '{"order":10,"index_patterns":["wazuh-alerts-4.x-*","wazuh-archives-4.x-*"],
-         "mappings":{"properties":{"data":{"properties":{"data":{"type":"object"}}}}}}')
+         "mappings":{"properties":{"data":{"properties":{
+           "data":{"type":"object","enabled":false},
+           "exception":{"type":"object","enabled":false}}}}}}')
   [[ "$code" == "200" ]] || die "could not apply index template thesis-nextcloud-overrides (HTTP $code)"
-  ok "index template thesis-nextcloud-overrides applied (audit log data.data as object)"
+  ok "index template thesis-nextcloud-overrides applied (data.data, data.exception not indexed)"
+}
+
+# GeoIP database for the normalizer (CTX-01): the GeoLite2-City file that ships
+# with the Wazuh indexer image, so the normalizer and Wazuh's own GeoLocation use
+# the same data and nothing is downloaded. MaxMind's licence restricts
+# redistribution: the copy lives in data/ (git-ignored), never in the repository.
+geoip_db() {
+  local src=/usr/share/wazuh-indexer/modules/ingest-geoip/GeoLite2-City.mmdb
+  local dst; dst="$(dirname "$DEPLOY_DIR")/data/geoip/GeoLite2-City.mmdb"
+  mkdir -p "$(dirname "$dst")"
+  if [[ -f "$dst" && "$(host_md5 "$dst")" == "$(ctr_md5 siem-wazuh.indexer-1 "$src")" ]]; then
+    ok "GeoIP database is current (${dst#"$(dirname "$DEPLOY_DIR")"/})"; return
+  fi
+  docker cp "siem-wazuh.indexer-1:$src" "$dst" >/dev/null
+  chmod 644 "$dst"
+  ok "GeoIP database copied from the indexer image to ${dst#"$(dirname "$DEPLOY_DIR")"/}"
 }
 
 # ---------------------------------------------------------------- Nextcloud
 nextcloud_up() {
   log "Starting Nextcloud project (proxy, app, db, redis, cron, agent)"
   (cd "$NC_DIR" && docker compose config -q && docker compose up -d)
+  recreate_stale_mounts "$NC_DIR"
   printf '    waiting for Nextcloud to install and become healthy (first run takes a few minutes)'
   local i state
   for i in $(seq 1 120); do
@@ -326,7 +419,11 @@ main() {
   secrets_and_config
   siem_certs
   siem_up
+  validate_manager_rules
+  recreate_stale_mounts "$SIEM_DIR"
+  wait_for_manager
   indexer_templates
+  geoip_db
   nextcloud_up
   if [[ "${SKIP_VERIFY:-0}" != "1" ]]; then
     "$DEPLOY_DIR/scripts/verify-phase1.sh" || warn "some checks did not pass; see the report above"

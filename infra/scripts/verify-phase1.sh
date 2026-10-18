@@ -244,13 +244,13 @@ search_count() {  # search_count <query_string>
 printf '  waiting for the test upload to be indexed'
 FOUND=0
 for i in $(seq 1 36); do
-  if (( $(search_count "rule.id:100100 AND full_log:\"$FILE\"") > 0 )); then FOUND=1; break; fi
+  if (( $(search_count "rule.groups:nextcloud_audit AND full_log:\"$FILE\"") > 0 )); then FOUND=1; break; fi
   printf '.'; sleep 5
 done; echo
-(( FOUND )) && pass "test upload is searchable in wazuh-alerts-* (rule 100100)" \
+(( FOUND )) && pass "test upload is searchable in wazuh-alerts-* (group nextcloud_audit)" \
             || fail "test upload not found in the index after 3 min (check: cd siem && docker compose logs wazuh.manager | tail)"
-for r in 100100 100101 100102; do
-  echo "  indexed events, rule $r: $(search_count "rule.id:$r")"
+for g in nextcloud_audit nextcloud_app nextcloud_proxy; do
+  echo "  indexed events, group $g: $(search_count "rule.groups:$g")"
 done
 
 # ------------------------------------------------------------------ INF-04 / INF-08 recreate

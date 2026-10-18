@@ -6,6 +6,9 @@ requires-python = ">=3.11"
 dependencies = []          # add per phase, pinned (PRD: reproducibility)
 
 [project.optional-dependencies]
+geo = [
+    "maxminddb==2.6.3",     # reads GeoLite2 / DB-IP .mmdb files (CTX-01)
+]
 dev = [
     "pytest>=8",
     "ruff>=0.6",

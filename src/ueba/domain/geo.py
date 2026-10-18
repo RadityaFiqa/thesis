@@ -12,10 +12,10 @@ from enum import StrEnum
 
 class GeoStatus(StrEnum):
     RESOLVED = "resolved"
-    PRIVATE = "private"        # RFC 1918, loopback, link-local, ...: no lookup is attempted
-    NOT_FOUND = "not_found"    # public, but the database has no entry
-    INVALID = "invalid"        # not an IP address
-    MISSING = "missing"        # the event had no client IP
+    PRIVATE = "private"  # RFC 1918, loopback, link-local, ...: no lookup is attempted
+    NOT_FOUND = "not_found"  # public, but the database has no entry
+    INVALID = "invalid"  # not an IP address
+    MISSING = "missing"  # the event had no client IP
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,11 +26,13 @@ class GeoContext:
     city: str | None = None
     latitude: float | None = None
     longitude: float | None = None
-    provider: str | None = None    # database name + version, recorded for reproducibility
+    provider: str | None = None  # database name + version, recorded for reproducibility
 
     def __post_init__(self) -> None:
-        located = any(v is not None for v in (self.country, self.region, self.city,
-                                               self.latitude, self.longitude))
+        located = any(
+            v is not None
+            for v in (self.country, self.region, self.city, self.latitude, self.longitude)
+        )
         if located and self.status is not GeoStatus.RESOLVED:
             raise ValueError(f"a {self.status} result must not carry a location (CTX-02)")
 

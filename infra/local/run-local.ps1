@@ -190,7 +190,7 @@ if ($found) { Pass "agent active: $($line.Trim())" } else { Fail "agent not acti
 
 Step 'Indexed and searchable (INF-05)'
 $q = Join-Path $env:TEMP 'thesis-q.json'
-('{"query":{"query_string":{"query":"rule.id:100100 AND full_log:\"' + $file + '\""}}}') | Set-Content -NoNewline -Encoding Ascii $q
+('{"query":{"query_string":{"query":"rule.groups:nextcloud_audit AND full_log:\"' + $file + '\""}}}') | Set-Content -NoNewline -Encoding Ascii $q
 $hit = $false
 Write-Host -NoNewline '  waiting for the upload to be indexed'
 for ($i = 1; $i -le 36; $i++) {

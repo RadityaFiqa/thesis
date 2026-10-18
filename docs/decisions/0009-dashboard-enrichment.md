@@ -17,6 +17,19 @@ This is about search and display for analysts. The research dataset is unaffecte
 - **Saved search "Nextcloud activity"** (`saved-search.json`), with columns user, action, outcome, client IP, country, city, virtual time, HTTP status and source. It hides page and asset requests and successful per-request WebDAV authentication; failed authentication stays visible. `setup.sh` also refreshes the `wazuh-alerts-*` field list. Multitenancy is off, so saved objects are shared by all users.
 - **Checks.** `verify-phase1.sh` fails if the hook is missing, or if its test upload's alert lacks `thesis.*`.
 
+### Readable view: index pattern `nextcloud-activity` (added the same day)
+- **`thesis.resource`**: the file or folder inside the user's files. Audit alerts take it from the message: the last quoted path, or the first one for share lines, which also give the user when the audit line has none. Proxy alerts take it from the WebDAV path.
+- **`thesis.view`**: true for exactly one row per real user action. Hidden duplicates:
+  - an upload's "created" line (its "written to" line stays), and a new folder's "written to" line;
+  - proxy rows the audit log already records; proxy rows stay only for folder listings and failed requests, except 401, because the audit log records the rejected credential;
+  - temporary-session logouts, "Login attempt" lines, successful per-request WebDAV authentication, `other`, and application-log lines (except brute-force detection).
+
+  Checked on a sampler run: 42 alerts became 13 rows, one per performed action.
+- **Filtered alias `nextcloud-activity`** (in the index template, so every new daily index gets it) shows `thesis.view: true` and only rows with a user. Nothing is copied: it is a view over the alert indices.
+- **Index pattern `nextcloud-activity`** (`index-pattern-nextcloud-activity.json`) lists only 20 fields. Source filters hide the raw Wazuh and Nextcloud fields in the document view. The saved search "Nextcloud activity" uses it. The full raw alert stays available through `wazuh-alerts-*`.
+- **Backfill:** today's 9,011 Nextcloud alerts were run through the pipeline once (`_update_by_query`, 0 failures). That only added `thesis.*`, `GeoLocation` and `thesis.view`; `full_log` and the Wazuh fields are unchanged.
+- **Limit:** in this view, successful simulated actions are audit rows, so `thesis.sim_time` is mostly empty there. Virtual time per action lives in the normalized dataset.
+
 ## Verification (2026-10-18)
 - `_simulate` on real alerts of every kind, then real indexing into a throwaway index: all accepted; IPv6 accepted; `sim_time` with microseconds and an offset queryable as a date; header subtrees no longer mapped.
 - Live sim-path upload and download: audit alerts carry `thesis.*` and `GeoLocation`, and proxy alerts also carry `http_status` and `sim_time`. No audit or proxy alert was rejected.

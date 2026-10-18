@@ -1,28 +1,33 @@
 {
   "attributes": {
     "title": "Nextcloud activity",
-    "description": "Thesis: Nextcloud user actions with clean thesis.* fields (decision 0009). Hides page/asset requests and successful per-request WebDAV authentication; failed authentication stays visible. thesis.sim_time is the simulator's virtual time (simulation path only); the time column is the real server time.",
+    "description": "Thesis: Nextcloud user actions from the filtered alias nextcloud-activity (decision 0009): page/asset requests, successful per-request WebDAV authentication and events without a user are already filtered out by the alias. thesis.sim_time is the simulator's virtual time (simulation path only); the time column is the real server time.",
     "columns": [
       "thesis.user",
       "thesis.action",
       "thesis.outcome",
+      "thesis.resource",
       "thesis.client_ip",
       "GeoLocation.country_name",
       "GeoLocation.city_name",
       "thesis.sim_time",
-      "thesis.http_status",
-      "thesis.source"
+      "thesis.http_status"
     ],
-    "sort": [["timestamp", "desc"]],
+    "sort": [
+      [
+        "timestamp",
+        "desc"
+      ]
+    ],
     "kibanaSavedObjectMeta": {
-      "searchSourceJSON": "{\"query\":{\"query\":\"thesis.source:* and not thesis.action:http and not (thesis.action:auth and not thesis.outcome:failure)\",\"language\":\"kuery\"},\"filter\":[],\"indexRefName\":\"kibanaSavedObjectMeta.searchSourceJSON.index\"}"
+      "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"kuery\"},\"filter\":[],\"indexRefName\":\"kibanaSavedObjectMeta.searchSourceJSON.index\"}"
     }
   },
   "references": [
     {
       "name": "kibanaSavedObjectMeta.searchSourceJSON.index",
       "type": "index-pattern",
-      "id": "wazuh-alerts-*"
+      "id": "nextcloud-activity"
     }
   ]
 }

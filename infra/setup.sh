@@ -370,9 +370,14 @@ indexer_templates() {
   #    switched off on an existing index; that part takes effect with the next daily index)
   local thesis_map
   thesis_map=$(jq -c '{properties: {thesis: .mappings.properties.thesis}}' "$cfg/index-template.json")
+  local alias_body
+  alias_body=$(jq -c '.aliases["nextcloud-activity"]' "$cfg/index-template.json")
   for idx in $(curl -sk -u "admin:$pw" "https://127.0.0.1:9200/_cat/indices/wazuh-alerts-4.x-*?h=index" | sort); do
     code=$(ix -X PUT "https://127.0.0.1:9200/$idx/_mapping" -d "$thesis_map")
     [[ "$code" == "200" ]] || die "could not add thesis.* mapping to $idx (HTTP $code)"
+    # Filtered alias for the readable dashboard view (new daily indices get it from the template)
+    code=$(ix -X PUT "https://127.0.0.1:9200/$idx/_alias/nextcloud-activity" -d "$alias_body")
+    [[ "$code" == "200" ]] || die "could not add alias nextcloud-activity to $idx (HTTP $code)"
   done
 
   # 3. Hook into Wazuh's alerts pipeline (it appears once Filebeat has started)
@@ -431,6 +436,23 @@ dashboard_objects() {
     [[ "$code" == "200" ]] && ok "index pattern wazuh-alerts-* fields refreshed ($(jq length "$tmp.fields") fields)" \
                            || warn "could not refresh index pattern fields (HTTP $code)"
   fi
+  # Readable index pattern over the filtered alias: only the listed fields, raw ones hidden
+  local ipd="$SIEM_DIR/config/thesis/index-pattern-nextcloud-activity.json"
+  dx "$base/api/index_patterns/_fields_for_wildcard?pattern=nextcloud-activity&meta_fields=_source&meta_fields=_id&meta_fields=_index" \
+    | jq -c --slurpfile d "$ipd" '[.fields[]? | select(.name as $n | $d[0].fields | index($n))]' > "$tmp.ncfields"
+  if [[ "$(jq length "$tmp.ncfields" 2>/dev/null || echo 0)" -gt 0 ]]; then
+    jq -c --slurpfile f "$tmp.ncfields" '{attributes: {
+            title: .title, timeFieldName: .timeFieldName,
+            fields: ($f[0] | tojson),
+            sourceFilters: ([.hide[] | {value: .}] | tojson)}}' "$ipd" > "$tmp.ncput"
+    code=$(dx -o /dev/null -w '%{http_code}' -X POST "$base/api/saved_objects/index-pattern/nextcloud-activity?overwrite=true" -d @"$tmp.ncput")
+    [[ "$code" == "200" ]] && ok "index pattern nextcloud-activity installed ($(jq length "$tmp.ncfields") fields)" \
+                           || warn "could not install index pattern nextcloud-activity (HTTP $code)"
+  else
+    warn "alias nextcloud-activity has no fields yet; index pattern not installed"
+  fi
+  rm -f "$tmp.ncfields" "$tmp.ncput"
+
   code=$(dx -o /dev/null -w '%{http_code}' -X POST "$base/api/saved_objects/search/thesis-nextcloud-activity?overwrite=true" \
          -d @"$SIEM_DIR/config/thesis/saved-search.json")
   rm -f "$tmp" "$tmp.fields" "$tmp.put"

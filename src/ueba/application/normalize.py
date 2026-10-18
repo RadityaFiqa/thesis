@@ -93,4 +93,10 @@ def _enrich(event: NormalizedEvent, http: NormalizedEvent) -> NormalizedEvent:
         bytes_transferred=http.bytes_transferred if event.action in _TRANSFER_ACTIONS else None,
         user_agent=event.user_agent or http.user_agent,
         client_ip=event.client_ip or http.client_ip,
+        # The audit log has no virtual time; it belongs to the request (decision 0008)
+        effective_time=event.effective_time or http.effective_time,
+        parse_issues=(
+            *event.parse_issues,
+            *(i for i in http.parse_issues if i == "invalid_sim_time"),
+        ),
     )

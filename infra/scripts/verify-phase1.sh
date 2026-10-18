@@ -98,6 +98,9 @@ chk_bind() {  # chk_bind <port> <expected-ip>
   else fail "port $1 bound to: $got (expected $2 only)"; fi
 }
 chk_bind 1514 "$BIND_IP"; chk_bind 1515 "$BIND_IP"; chk_bind "$DPORT" "$BIND_IP"; chk_bind 9200 127.0.0.1
+# Simulation path (decision 0008): trusts injected client IPs, so it must stay local
+SIM_PORT=$(env_get "$NC_DIR/.env" SIM_PORT)
+chk_bind "${SIM_PORT:-8443}" 127.0.0.1
 for p in 5432 6379 55000; do
   if grep -qE ":$p\$" <<<"$LISTEN"; then fail "port $p is published on the host"; else pass "port $p not published on the host"; fi
 done
@@ -199,15 +202,21 @@ if [[ "$VIA_CF" == "1" ]]; then
   [[ -n "$MYIP" && "$GOT" == "$MYIP" ]] && pass "Nextcloud logged the real client IP ($GOT) through Cloudflare + proxy" \
                                           || fail "Nextcloud logged '$GOT', expected client IP '$MYIP'"
 else skip "real-client-IP check needs the Cloudflare path"; fi
-# Spoofing attempt that bypasses Cloudflare: forged headers must be ignored
+# Spoofing attempt that bypasses Cloudflare: forged headers must be ignored, including
+# the simulation headers. This request reaches :443 from the Docker gateway, the very
+# address the simulation listener (:8443) trusts, so it also proves the trust stays per listener.
 SPOOF=203.0.113.66; SFILE="spoofcheck-$TS.txt"; echo spoof > "$TMP/$SFILE"
 curl -4 -s -k --max-time 30 --resolve "$NCD:443:127.0.0.1" -H "CF-Connecting-IP: $SPOOF" -H "X-Forwarded-For: $SPOOF" \
+  -H "X-Sim-Client-IP: $SPOOF" -H "X-Sim-Time: 2000-01-01T00:00:00+00:00" \
   -o /dev/null -u "$CHECK_USER:$CPW" -T "$TMP/$SFILE" "https://$NCD/remote.php/dav/files/$CHECK_USER/$SFILE"
 sleep 2
 SGOT=$(ncc exec -T wazuh-agent grep -F "$SFILE" /var/log/nextcloud/audit.log 2>/dev/null | tail -1 | jq -r '.remoteAddr // empty' 2>/dev/null)
 if [[ -z "$SGOT" ]]; then warn "spoof test request not found in audit.log"
 elif [[ "$SGOT" == "$SPOOF" ]]; then fail "forged client IP was accepted ($SPOOF)"
-else pass "forged CF-Connecting-IP/X-Forwarded-For ignored (logged $SGOT, not $SPOOF)"; fi
+else pass "forged CF-Connecting-IP/X-Forwarded-For/X-Sim-Client-IP ignored (logged $SGOT, not $SPOOF)"; fi
+SIMT=$(ncc exec -T wazuh-agent grep -F "$SFILE" /var/log/caddy/access.log 2>/dev/null | tail -1 | jq -r '.sim_time // empty' 2>/dev/null)
+[[ -z "$SIMT" ]] && pass "X-Sim-Time ignored on the public path" \
+                 || fail "public path logged a simulated time ($SIMT)"
 
 # ------------------------------------------------------------------ INF-07 / INF-08
 section "Agent enrollment and connection (INF-07, INF-08)"

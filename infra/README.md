@@ -147,6 +147,10 @@ Run these on the VPS from `~/thesis/infra`. Use `sudo`, or log out and back in o
 | Normalize events from the index | `sudo ./scripts/ueba.sh normalize --indexer --since <ISO time> --out ../data/events.jsonl --geoip ../data/geoip/GeoLite2-City.mmdb` |
 | Trace sampled actions (LOG-01) | `sudo ./scripts/ueba.sh trace --manifest reports/<sample>/manifest.jsonl --events ../data/events.jsonl` |
 
+**Simulation path (Phase 3).** `https://localhost:8443` on the VPS reaches the same Nextcloud, but there the client IP comes from `X-Sim-Client-IP` and a virtual time from `X-Sim-Time` (ISO 8601 with timezone). It is published on 127.0.0.1 only; the public path ignores both headers, and `verify-phase1.sh` checks this. Caddy's certificate there is from its internal CA, so clients must skip verification or trust that CA. Example:
+`curl -k -u user:pass -H "X-Sim-Client-IP: 36.86.63.1" -H "X-Sim-Time: 2026-11-02T03:15:00+07:00" https://localhost:8443/remote.php/dav/files/user/`
+See `docs/decisions/0008-simulation-path.md`.
+
 **Changing configuration.** After editing anything mounted into a container (Caddyfile, `local_rules.xml`, `ossec.conf`, ...), run `sudo ./setup.sh`, not `docker compose restart`. Containers keep reading the old copy of a replaced file, and the Wazuh manager copies its config only when it is created. `setup.sh` detects both and recreates only what changed. It also tests new Wazuh rules first and refuses to load ones that would stop the manager (`docs/decisions/0007-safe-config-deploys.md`).
 
 **Never run `docker compose down -v`, `docker volume rm` or `docker system prune --volumes`.** They delete the data (PRD: data preservation). `docker compose down` without `-v` is safe.

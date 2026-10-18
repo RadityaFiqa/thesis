@@ -28,3 +28,4 @@ What this costs, what it enables, what to watch.
 | [0005](0005-free-form-json-not-indexed.md) | Free-form JSON subtrees stored but not indexed |
 | [0006](0006-geoip-source.md) | GeoIP: own lookup with a recorded database, plus Wazuh GeoLocation for search |
 | [0007](0007-safe-config-deploys.md) | Detect stale bind mounts and validate Wazuh rules before reloading |
+| [0008](0008-simulation-path.md) | Simulation path: injected client IP and virtual time on a local-only listener |

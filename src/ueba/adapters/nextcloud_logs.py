@@ -231,11 +231,20 @@ def parse_proxy(
     else:
         transferred = None
 
+    # Virtual time from the simulation listener (decision 0008). Only that listener
+    # logs sim_time; it must be ISO 8601 with a timezone, or it is flagged and ignored.
+    effective_time = None
+    if sim_time := rec.get("sim_time"):
+        effective_time = _parse_time(sim_time) if isinstance(sim_time, str) else None
+        if effective_time is None:
+            issues.append("invalid_sim_time")
+
     agents = (req.get("headers") or {}).get("User-Agent") or [None]
     return ParseResult(
         NormalizedEvent(
             event_time=event_time,
             ingest_time=ingest_time,
+            effective_time=effective_time,
             action=action,
             outcome=outcome,
             provenance=Provenance(

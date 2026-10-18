@@ -14,8 +14,8 @@ Phases and milestones come from the PRD (section 9). The week estimates are sugg
 
 ## Phase 3 plan
 
-1. Simulation path: a Caddy listener on 127.0.0.1 only, trusting `X-Sim-Client-IP` and logging `X-Sim-Time`, so the simulator can set client IP and virtual time without weakening the public path (CTX-03).
-2. `effective_time` in the normalizer from the logged virtual time; `event_time` stays the server's clock.
+1. ✅ Simulation path: a Caddy listener on 127.0.0.1 only, trusting `X-Sim-Client-IP` and logging `X-Sim-Time`, so the simulator can set client IP and virtual time without weakening the public path (CTX-03). Decision 0008.
+2. ✅ `effective_time` in the normalizer from the logged virtual time; `event_time` stays the server's clock.
 3. Simulator CLI (`ueba simulate`) with YAML profiles, seeds, and a ground-truth store kept apart from the pipeline (SIM-04); records each request id the proxy returns.
 4. Warm up new synthetic users before a run (first login copies ~60 skeleton files).
 5. Normal profiles with legitimate bursts; scenarios: mass download, mass upload, broad file access (SIM-02/03).

@@ -16,7 +16,8 @@ from ueba.adapters.nextcloud_logs import AUDIT_LOCATION, PROXY_LOCATION, parse_r
 from ueba.domain.events import Action, NormalizedEvent, Outcome, Provenance, SourceSystem
 from ueba.domain.geo import GeoContext, GeoStatus
 
-SCHEMA_VERSION = "normalized-event/1"
+# /2 adds effective_time (simulation virtual time)
+SCHEMA_VERSION = "normalized-event/2"
 
 
 def _plain(value: Any) -> Any:
@@ -41,6 +42,9 @@ def event_from_dict(d: dict[str, Any]) -> NormalizedEvent:
     return NormalizedEvent(
         event_time=datetime.fromisoformat(d["event_time"]),
         ingest_time=datetime.fromisoformat(d["ingest_time"]) if d.get("ingest_time") else None,
+        effective_time=(
+            datetime.fromisoformat(d["effective_time"]) if d.get("effective_time") else None
+        ),
         action=Action(d["action"]),
         outcome=Outcome(d["outcome"]),
         provenance=Provenance(

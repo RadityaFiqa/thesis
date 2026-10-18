@@ -1,19 +1,28 @@
-# Reverse proxy for both domains (PRD INF-03, CTX-03).
-# Both domains sit behind the Cloudflare proxy, so the real client IP is taken
-# from CF-Connecting-IP, but only when the connection really comes from
-# Cloudflare. Anyone else gets their socket address, so the header can't be spoofed.
-# Cloudflare ranges: https://www.cloudflare.com/ips/ (checked 2026-10-18)
+# Reverse proxy for both domains (PRD INF-03, CTX-03), plus the simulation path (Phase 3).
+#
+# Public path (:443): both domains sit behind the Cloudflare proxy, so the real
+# client IP is taken from CF-Connecting-IP, but only when the connection really
+# comes from Cloudflare. Anyone else gets their socket address, so the header
+# can't be spoofed. Cloudflare ranges: https://www.cloudflare.com/ips/ (checked 2026-10-18)
+#
+# Simulation path (:8443): published on 127.0.0.1 only (see docker-compose.yml),
+# so only processes on the VPS can reach it. There, and only there, the simulator
+# sets the client IP (X-Sim-Client-IP) and a virtual time (X-Sim-Time, logged as
+# sim_time). Decision record 0008.
 {
-	servers {
+	servers :443 {
 		trusted_proxies static 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 2400:cb00::/32 2606:4700::/32 2803:f800::/32 2405:b500::/32 2405:8100::/32 2a06:98c0::/29 2c0f:f248::/32
 		client_ip_headers CF-Connecting-IP
 	}
+	servers :8443 {
+		# Connections to the 127.0.0.1-published port arrive from the Docker network gateway
+		trusted_proxies static {$SIM_TRUSTED_PROXY}
+		client_ip_headers X-Sim-Client-IP
+	}
 }
 
-{$NEXTCLOUD_DOMAIN} {
-	tls {$CADDY_TLS}
-
-	# Access log for behavioral analysis: method, URI, status, bytes, client_ip, user agent
+# Access log for behavioral analysis: method, URI, status, bytes, client_ip, user agent
+(access_log) {
 	log {
 		output file /var/log/caddy/access.log {
 			roll_size 100MiB
@@ -25,22 +34,45 @@
 	log_append request_id {http.request.uuid}
 	# Wazuh's ingest pipeline adds GeoLocation for data.srcip, so name the client IP that way
 	log_append srcip {client_ip}
-
-	header Strict-Transport-Security "max-age=31536000;"
 	# Returned to clients so the simulator can record which requests it made (ground truth).
 	# "?" = only if Nextcloud didn't already return its reqId (the same value)
 	header ?X-Request-Id {http.request.uuid}
+}
 
-	redir /.well-known/carddav /remote.php/dav/ 301
-	redir /.well-known/caldav /remote.php/dav/ 301
-
+(nextcloud_upstream) {
 	reverse_proxy app:80 {
+		# Nextcloud only answers for its trusted domain, whichever listener was used
+		header_up Host {$NEXTCLOUD_DOMAIN}
 		# Overwrite rather than append, so Nextcloud sees exactly the resolved client IP
 		header_up X-Forwarded-For {client_ip}
 		header_up X-Real-IP {client_ip}
 		# Overwrite any client value; Apache turns it into Nextcloud's reqId
 		header_up X-Request-Id {http.request.uuid}
 	}
+}
+
+{$NEXTCLOUD_DOMAIN} {
+	tls {$CADDY_TLS}
+	import access_log
+
+	header Strict-Transport-Security "max-age=31536000;"
+
+	redir /.well-known/carddav /remote.php/dav/ 301
+	redir /.well-known/caldav /remote.php/dav/ 301
+
+	import nextcloud_upstream
+}
+
+# Simulation path. TLS (Caddy's internal CA) because Nextcloud's session cookies
+# are "secure" and clients won't send them over plain HTTP.
+https://localhost:8443 {
+	tls internal
+	import access_log
+	# The virtual time the simulator assigns to this request (ISO 8601). Only this
+	# listener logs it; the normalizer turns it into effective_time.
+	log_append sim_time {http.request.header.X-Sim-Time}
+
+	import nextcloud_upstream
 }
 
 {$WAZUH_DOMAIN} {

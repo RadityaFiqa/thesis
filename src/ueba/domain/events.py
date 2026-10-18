@@ -53,6 +53,9 @@ class NormalizedEvent:
     outcome: Outcome
     provenance: Provenance
     ingest_time: datetime | None = None  # UTC, when the SIEM processed it; None if unknown
+    # Virtual time assigned by the simulator (simulation path only, decision 0008);
+    # None for real traffic. event_time always stays the server's clock.
+    effective_time: datetime | None = None
     user_id: str | None = None
     client_ip: str | None = None
     resource: str | None = None  # file path or other resource reference
@@ -64,7 +67,7 @@ class NormalizedEvent:
     parse_issues: tuple[str, ...] = field(default_factory=tuple)  # LOG-04 quality flags
 
     def __post_init__(self) -> None:
-        for name in ("event_time", "ingest_time"):
+        for name in ("event_time", "ingest_time", "effective_time"):
             value: datetime | None = getattr(self, name)
             if value is not None and (value.tzinfo is None or value.utcoffset() is None):
                 raise ValueError(f"{name} must be timezone-aware (UTC)")
@@ -74,8 +77,13 @@ class NormalizedEvent:
         return self.provenance.source_event_id
 
     @property
+    def analysis_time(self) -> datetime:
+        """The time behavioral features use: virtual time if simulated, else the event time."""
+        return self.effective_time or self.event_time
+
+    @property
     def collection_lag_seconds(self) -> float | None:
-        """Source-to-SIEM delay (LOG-05); None when the ingest time is unknown."""
+        """Source-to-SIEM delay (LOG-05), always on real clocks; None if ingest time is unknown."""
         if self.ingest_time is None:
             return None
         return (self.ingest_time - self.event_time).total_seconds()

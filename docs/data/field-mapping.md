@@ -1,6 +1,6 @@
 # Field mapping: raw logs → `NormalizedEvent` (LOG-03, LOG-04)
 
-Schema `normalized-event/1`. Code: `src/ueba/adapters/nextcloud_logs.py` (parsing) and `src/ueba/application/normalize.py` (correlation). Every rule below comes from real samples taken with `infra/scripts/phase2-sample-actions.sh`; the samples behind the tests are in `tests/fixtures/phase2-samples/`.
+Schema `normalized-event/2` (/2 added `effective_time`). Behavioral features use `analysis_time` = `effective_time` if present, else `event_time`. Code: `src/ueba/adapters/nextcloud_logs.py` (parsing) and `src/ueba/application/normalize.py` (correlation). Every rule below comes from real samples taken with `infra/scripts/phase2-sample-actions.sh`; the samples behind the tests are in `tests/fixtures/phase2-samples/`.
 
 ## Sources
 
@@ -18,6 +18,7 @@ All three carry the same **request id**: Caddy generates a UUID for each request
 |---|---|---|---|
 | `event_time` | `time` (ISO 8601, UTC) | `ts` (epoch seconds) | Record skipped as `invalid_record` |
 | `ingest_time` | Wazuh alert `timestamp` (manager processing time) | same | `None` when read from files |
+| `effective_time` | from the proxy record of the same request | `sim_time`, logged only by the simulation listener (decision 0008) | `None` for real traffic; unparsable or timezone-less values → `None` + flag `invalid_sim_time` |
 | `action` | from `message` + HTTP method, see below | from method + path | — |
 | `outcome` | `success` / `failure` from message | status < 400 → success, else failure | `unknown`, never assumed success (proxy login: both outcomes answer 303) |
 | `user_id` | `user`; for auth lines, the name in the message | user in `/remote.php/dav/files/<user>/` (flag `user_from_url`) | `None` ("--" in the log means none) |
@@ -71,7 +72,7 @@ Every input event ends up exactly once as output, merged duplicate, or supersede
 
 ## Quality flags (`parse_issues`)
 
-`user_from_url`, `proxy_only`, `no_proxy_record`, `side_effect_write`, `unmapped_message`, `missing_status`.
+`user_from_url`, `proxy_only`, `no_proxy_record`, `side_effect_write`, `unmapped_message`, `missing_status`, `invalid_sim_time`.
 
 ## GeoIP (CTX-01, CTX-02)
 

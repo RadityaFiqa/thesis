@@ -1,0 +1,30 @@
+{
+  "description": "Thesis: clean thesis.* fields and GeoLocation for Nextcloud alerts (decision 0009). Called by a pipeline processor appended to Wazuh's filebeat-*-wazuh-alerts-pipeline (setup.sh adds it). Every step ignores failures: an enrichment problem must never stop an alert from being indexed. Wazuh stores data.status as a string (static field), so it is parsed here.",
+  "processors": [
+    {
+      "script": {
+        "tag": "thesis_fields",
+        "lang": "painless",
+        "if": "ctx.location != null && (ctx.location == '/var/log/nextcloud/audit.log' || ctx.location == '/var/log/nextcloud/nextcloud.log' || ctx.location == '/var/log/caddy/access.log')",
+        "ignore_failure": true,
+        "source": "def d = ctx.data; if (!(d instanceof Map)) { return; } Map t = new HashMap(); String loc = ctx.location; String src = loc.endsWith('audit.log') ? 'audit' : (loc.endsWith('access.log') ? 'proxy' : 'app'); t.put('source', src); def req = d.get('request'); String uri = null; String method = null; String ip = null; if (src == 'proxy' && req instanceof Map) { ip = req.get('client_ip'); uri = req.get('uri'); method = req.get('method'); def h = req.get('headers'); if (h instanceof Map && h.get('User-Agent') instanceof List && h.get('User-Agent').size() > 0) { t.put('user_agent', h.get('User-Agent').get(0)); } } else { ip = d.get('remoteAddr'); uri = d.get('url'); method = d.get('method'); def ua = d.get('userAgent'); if (ua != null && ua != '--') { t.put('user_agent', ua); } } if (ip != null && ip != '' && ip != '--') { t.put('client_ip', ip); } String path = uri; if (path != null) { int q = path.indexOf('?'); if (q >= 0) { path = path.substring(0, q); } } String user = d.get('user'); if (user == null || user == '' || user == '--') { user = null; String dav = '/remote.php/dav/files/'; if (path != null && path.startsWith(dav)) { String rest = path.substring(dav.length()); int s = rest.indexOf('/'); user = s >= 0 ? rest.substring(0, s) : rest; } else { String msg = d.get('message'); if (msg != null && msg.startsWith('Login ')) { int a = msg.indexOf('\"'); int b = a >= 0 ? msg.indexOf('\"', a + 1) : -1; if (b > a) { user = msg.substring(a + 1, b); } } } } if (user != null && user != '') { t.put('user', user); } List groups = ctx.rule instanceof Map && ctx.rule.get('groups') instanceof List ? ctx.rule.get('groups') : new ArrayList(); boolean web = path == '/login' || path == '/index.php/login'; String action = null; String outcome = null; if (src == 'proxy') { def st = d.get('status'); def code = null; if (st instanceof Number) { code = st.intValue(); } else if (st instanceof String && st.length() == 3 && Character.isDigit(st.charAt(0)) && Character.isDigit(st.charAt(1)) && Character.isDigit(st.charAt(2))) { code = Integer.parseInt(st); } if (code != null) { t.put('http_status', code); outcome = code < 400 ? 'success' : 'failure'; } boolean isDav = path != null && path.startsWith('/remote.php/dav/files/'); if (isDav) { Map m = ['GET': 'download', 'PUT': 'upload', 'PROPFIND': 'list', 'MKCOL': 'mkdir', 'MOVE': 'rename', 'DELETE': 'delete']; action = m.containsKey(method) ? m.get(method) : 'dav_other'; } else if (web && method == 'POST') { action = 'login'; outcome = null; } else if (path == '/logout' || path == '/index.php/logout') { action = 'logout'; } else if (path != null && path.startsWith('/ocs/v2.php/apps/files_sharing')) { action = 'share'; } else { action = 'http'; } def sim = d.get('sim_time'); if (sim != null && sim != '') { t.put('sim_time', sim); } } else if (src == 'audit') { if (groups.contains('nc_auth_success') || groups.contains('nc_auth_failure') || groups.contains('nc_auth_attempt')) { action = web ? 'login' : 'auth'; outcome = groups.contains('nc_auth_failure') ? 'failure' : (groups.contains('nc_auth_success') ? 'success' : null); } else if (groups.contains('nc_logout')) { action = 'logout'; outcome = 'success'; } else if (groups.contains('nc_file_write')) { action = method == 'PUT' ? 'upload' : (method == 'MKCOL' ? 'mkdir' : 'write'); outcome = 'success'; } else if (groups.contains('nc_file_access')) { action = method == 'GET' ? 'download' : 'access'; outcome = 'success'; } else if (groups.contains('nc_file_delete')) { action = 'delete'; outcome = 'success'; } else if (groups.contains('nc_file_rename')) { action = 'rename'; outcome = 'success'; } else if (groups.contains('nc_share')) { action = 'share'; outcome = 'success'; } else { action = 'other'; } } else { action = groups.contains('nc_bruteforce') ? 'bruteforce_detected' : 'app_log'; } if (action != null) { t.put('action', action); } if (outcome != null) { t.put('outcome', outcome); } ctx.thesis = t;"
+      }
+    },
+    {
+      "geoip": {
+        "tag": "thesis_geoip",
+        "if": "ctx.GeoLocation == null && ctx.thesis instanceof Map && ctx.thesis.client_ip != null",
+        "field": "thesis.client_ip",
+        "target_field": "GeoLocation",
+        "properties": [
+          "city_name",
+          "country_name",
+          "region_name",
+          "location"
+        ],
+        "ignore_missing": true,
+        "ignore_failure": true
+      }
+    }
+  ]
+}

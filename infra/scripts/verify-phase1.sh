@@ -261,6 +261,16 @@ done; echo
 for g in nextcloud_audit nextcloud_app nextcloud_proxy; do
   echo "  indexed events, group $g: $(search_count "rule.groups:$g")"
 done
+# Dashboard enrichment (decision 0009): Wazuh's alerts pipeline must call ours, and
+# the test upload's alert must carry the thesis.* fields
+HOOKED=$(idx "/_ingest/pipeline/filebeat-*-wazuh-alerts-pipeline" | jq '[.[].processors[] | select(.pipeline.name? == "thesis-nextcloud-enrich")] | length' 2>/dev/null)
+(( ${HOOKED:-0} > 0 )) && pass "Wazuh alerts pipeline calls thesis-nextcloud-enrich" \
+                       || fail "Wazuh alerts pipeline does not call thesis-nextcloud-enrich (re-run setup.sh)"
+if (( FOUND )); then
+  ENRICHED=$(search_count "rule.groups:nextcloud_audit AND full_log:\"$FILE\" AND thesis.action:upload AND thesis.user:\"$CHECK_USER\" AND _exists_:thesis.client_ip")
+  (( ENRICHED > 0 )) && pass "test upload alert carries thesis.* fields (action, user, client_ip)" \
+                     || fail "test upload alert has no thesis.* fields"
+fi
 
 # ------------------------------------------------------------------ INF-04 / INF-08 recreate
 if [[ "$RECREATE" == "1" ]]; then

@@ -343,22 +343,99 @@ wait_for_manager() {
   die "wazuh-analysisd not running; check: cd siem && docker compose logs wazuh.manager | tail -50"
 }
 
-# Nextcloud's logs carry free-form JSON under "data" (object in audit lines, an
-# empty array in some application lines) and "exception" (traces whose argument
-# types vary). Any type the indexer guesses for them rejects the other shapes, and
-# rejected alerts vanish silently. These subtrees are stored but not indexed
-# ("enabled": false), so every shape is accepted; the raw line stays in full_log.
-# Applies to daily indices created after it is installed (decision record 0005).
+# Indexer configuration from siem/config/thesis/ (decision records 0005, 0009):
+# - ingest-pipeline.json: thesis.* fields (client_ip, user, action, outcome,
+#   http_status, sim_time, user_agent) and GeoLocation for every Nextcloud alert;
+# - index-template.json: types for thesis.*, and free-form or noisy subtrees
+#   (data.data, data.exception, HTTP headers, TLS) stored but not indexed, so no
+#   shape can get an alert rejected.
+# Hooking in: Filebeat writes to its default index name and Wazuh's pipeline
+# re-routes each alert to wazuh-alerts-4.x-<date> (date_index_name), so an
+# index.final_pipeline on the alert indices is never consulted. Instead a
+# pipeline processor calling ours is appended to Wazuh's alerts pipeline.
+# Filebeat installs that pipeline only when it is missing, so the hook survives
+# restarts; a Wazuh upgrade recreates it, and this function adds the hook again.
 indexer_templates() {
-  local code
-  code=$(curl -sk -o /dev/null -w '%{http_code}' -u "admin:$(env_get "$SIEM_DIR/.env" INDEXER_PASSWORD)" \
-    -H 'Content-Type: application/json' -X PUT https://127.0.0.1:9200/_template/thesis-nextcloud-overrides \
-    -d '{"order":10,"index_patterns":["wazuh-alerts-4.x-*","wazuh-archives-4.x-*"],
-         "mappings":{"properties":{"data":{"properties":{
-           "data":{"type":"object","enabled":false},
-           "exception":{"type":"object","enabled":false}}}}}}')
+  local cfg="$SIEM_DIR/config/thesis" pw idx code
+  pw=$(env_get "$SIEM_DIR/.env" INDEXER_PASSWORD)
+  ix() { curl -sk -o /dev/null -w '%{http_code}' -u "admin:$pw" -H 'Content-Type: application/json' "$@"; }
+
+  # 1. Our pipeline first, so nothing ever calls a missing one
+  code=$(ix -X PUT https://127.0.0.1:9200/_ingest/pipeline/thesis-nextcloud-enrich -d @"$cfg/ingest-pipeline.json")
+  [[ "$code" == "200" ]] || die "could not install ingest pipeline thesis-nextcloud-enrich (HTTP $code)"
+  code=$(ix -X PUT https://127.0.0.1:9200/_template/thesis-nextcloud-overrides -d @"$cfg/index-template.json")
   [[ "$code" == "200" ]] || die "could not apply index template thesis-nextcloud-overrides (HTTP $code)"
-  ok "index template thesis-nextcloud-overrides applied (data.data, data.exception not indexed)"
+
+  # 2. Existing alert indices: add the thesis.* types (header and TLS subtrees can't be
+  #    switched off on an existing index; that part takes effect with the next daily index)
+  local thesis_map
+  thesis_map=$(jq -c '{properties: {thesis: .mappings.properties.thesis}}' "$cfg/index-template.json")
+  for idx in $(curl -sk -u "admin:$pw" "https://127.0.0.1:9200/_cat/indices/wazuh-alerts-4.x-*?h=index" | sort); do
+    code=$(ix -X PUT "https://127.0.0.1:9200/$idx/_mapping" -d "$thesis_map")
+    [[ "$code" == "200" ]] || die "could not add thesis.* mapping to $idx (HTTP $code)"
+  done
+
+  # 3. Hook into Wazuh's alerts pipeline (it appears once Filebeat has started)
+  local i names name tmp
+  for i in $(seq 1 30); do
+    names=$(curl -sk -u "admin:$pw" "https://127.0.0.1:9200/_ingest/pipeline/filebeat-*-wazuh-alerts-pipeline" 2>/dev/null | jq -r 'keys[]?' || true)
+    [[ -n "$names" ]] && break
+    sleep 3
+  done
+  if [[ -z "$names" ]]; then
+    warn "Wazuh alerts pipeline not found yet; re-run setup.sh once the manager has started"
+    return
+  fi
+  for name in $names; do
+    tmp=$(mktemp)
+    curl -sk -u "admin:$pw" "https://127.0.0.1:9200/_ingest/pipeline/$name" | jq --arg n "$name" '.[$n]' > "$tmp"
+    if jq -e 'any(.processors[]; .pipeline.tag? == "thesis_enrich")' "$tmp" >/dev/null; then
+      ok "$name already calls thesis-nextcloud-enrich"
+    else
+      jq '.processors += [{"pipeline": {"tag": "thesis_enrich", "name": "thesis-nextcloud-enrich", "ignore_failure": true}}]' "$tmp" > "$tmp.new"
+      code=$(ix -X PUT "https://127.0.0.1:9200/_ingest/pipeline/$name" -d @"$tmp.new")
+      [[ "$code" == "200" ]] || { rm -f "$tmp" "$tmp.new"; die "could not hook into $name (HTTP $code)"; }
+      ok "$name now calls thesis-nextcloud-enrich"
+    fi
+    rm -f "$tmp" "$tmp.new"
+  done
+  ok "thesis.* fields and GeoLocation enabled for Nextcloud alerts (header clutter off from the next daily index)"
+}
+
+# Dashboard objects (decision 0009). Multitenancy is off in opensearch_dashboards.yml,
+# so saved objects are shared by all users (a securitytenant header would get 403):
+# - refresh the wazuh-alerts-* index pattern's field list, so thesis.* can be columns;
+# - the "Nextcloud activity" saved search from siem/config/thesis/saved-search.json.
+dashboard_objects() {
+  local pw base i code tmp
+  pw=$(env_get "$SIEM_DIR/.env" INDEXER_PASSWORD)
+  base="https://$(env_get "$SIEM_DIR/.env" HOST_BIND_IP):$(env_get "$SIEM_DIR/.env" DASHBOARD_PORT)"
+  dx() { curl -sk -u "admin:$pw" -H 'osd-xsrf: true' -H 'Content-Type: application/json' "$@"; }
+  for i in $(seq 1 40); do
+    code=$(dx -o /dev/null -w '%{http_code}' "$base/api/status")
+    [[ "$code" == "200" ]] && break
+    sleep 3
+  done
+  if [[ "$code" != "200" ]]; then warn "dashboard not ready (HTTP $code); saved search not installed, re-run setup.sh"; return; fi
+
+  tmp=$(mktemp)
+  dx "$base/api/saved_objects/index-pattern/wazuh-alerts-%2A" > "$tmp"
+  if ! jq -e '.attributes.title == "wazuh-alerts-*"' "$tmp" >/dev/null; then
+    rm -f "$tmp"; warn "index pattern wazuh-alerts-* not found (open the Wazuh app once), saved search not installed"; return
+  fi
+  dx "$base/api/index_patterns/_fields_for_wildcard?pattern=wazuh-alerts-*&meta_fields=_source&meta_fields=_id&meta_fields=_type&meta_fields=_index&meta_fields=_score" \
+    | jq -c '.fields' > "$tmp.fields"
+  if [[ "$(jq 'length' "$tmp.fields" 2>/dev/null || echo 0)" -gt 0 ]]; then
+    jq -c --slurpfile f "$tmp.fields" '{attributes: (.attributes + {fields: ($f[0] | tojson)})}' "$tmp" > "$tmp.put"
+    code=$(dx -o /dev/null -w '%{http_code}' -X PUT "$base/api/saved_objects/index-pattern/wazuh-alerts-%2A" -d @"$tmp.put")
+    [[ "$code" == "200" ]] && ok "index pattern wazuh-alerts-* fields refreshed ($(jq length "$tmp.fields") fields)" \
+                           || warn "could not refresh index pattern fields (HTTP $code)"
+  fi
+  code=$(dx -o /dev/null -w '%{http_code}' -X POST "$base/api/saved_objects/search/thesis-nextcloud-activity?overwrite=true" \
+         -d @"$SIEM_DIR/config/thesis/saved-search.json")
+  rm -f "$tmp" "$tmp.fields" "$tmp.put"
+  [[ "$code" == "200" ]] && ok "saved search \"Nextcloud activity\" installed (Discover → Open)" \
+                         || warn "could not install the saved search (HTTP $code)"
 }
 
 # GeoIP database for the normalizer (CTX-01): DB-IP City Lite, downloaded on
@@ -418,6 +495,7 @@ main() {
   recreate_stale_mounts "$SIEM_DIR"
   wait_for_manager
   indexer_templates
+  dashboard_objects
   geoip_db
   nextcloud_up
   if [[ "${SKIP_VERIFY:-0}" != "1" ]]; then

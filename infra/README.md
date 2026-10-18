@@ -152,6 +152,8 @@ Run these on the VPS from `~/thesis/infra`. Use `sudo`, or log out and back in o
 `curl -k -u user:pass -H "X-Sim-Client-IP: 36.86.63.1" -H "X-Sim-Time: 2026-11-02T03:15:00+07:00" https://localhost:8443/remote.php/dav/files/user/`
 See `docs/decisions/0008-simulation-path.md`.
 
+**Reading Nextcloud activity in the dashboard.** Open Discover → Open → **"Nextcloud activity"**. Every Nextcloud alert carries `thesis.user`, `thesis.action`, `thesis.outcome`, `thesis.client_ip`, `thesis.http_status`, `thesis.sim_time` (proxy alerts from the simulation path only) and `GeoLocation`. Search examples: `thesis.user:"sim-u001"`, `thesis.outcome:failure`, `thesis.client_ip:"202.152.0.0/16"`. Dashboard locations use the indexer's 2019 GeoLite2; the research dataset uses DB-IP (decision 0009).
+
 **Changing configuration.** After editing anything mounted into a container (Caddyfile, `local_rules.xml`, `ossec.conf`, ...), run `sudo ./setup.sh`, not `docker compose restart`. Containers keep reading the old copy of a replaced file, and the Wazuh manager copies its config only when it is created. `setup.sh` detects both and recreates only what changed. It also tests new Wazuh rules first and refuses to load ones that would stop the manager (`docs/decisions/0007-safe-config-deploys.md`).
 
 **Never run `docker compose down -v`, `docker volume rm` or `docker system prune --volumes`.** They delete the data (PRD: data preservation). `docker compose down` without `-v` is safe.
@@ -209,6 +211,7 @@ infra/                           (~/thesis/infra on the VPS)
 │   └── wazuh-agent/ossec.conf
 └── siem/
     ├── docker-compose.yml, .env.example, generate-indexer-certs.yml
+    ├── config/thesis/           ingest pipeline, index template, saved search (decision 0009)
     └── config/  (from wazuh-docker v4.14.9 single-node; changes marked "Thesis")
 ```
 

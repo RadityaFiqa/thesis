@@ -1,6 +1,6 @@
 # Infrastructure: Nextcloud + Wazuh
 
-This folder (`infra/` in the repository, `~/deploy` on the VPS) deploys the Phase 1 environment from the PRD (milestone M1) on a single Ubuntu 24.04 VPS:
+This folder (`infra/` in the repository, `~/thesis/infra` in the VPS's git clone) deploys the Phase 1 environment from the PRD (milestone M1) on a single Ubuntu 24.04 VPS:
 
 - **two independent Compose projects**, `nextcloud/` and `siem/`, with no shared Docker network
 - **persistent logs** read by a Wazuh agent
@@ -44,13 +44,21 @@ Internet ── Cloudflare ── :443 Caddy ──┬── nextcloud.gbb-landu
 
 ## Install
 
-From the repository root on your PC (needs SSH key login to the VPS):
+The VPS runs from a git clone. First install:
+
+```bash
+git clone https://github.com/RadityaFiqa/thesis.git ~/thesis
+cd ~/thesis/infra
+sudo ./setup.sh
+```
+
+Updates: commit and push from your PC, then from the repository root:
 
 ```powershell
 .\tools\deploy-to-vps.ps1
 ```
 
-This packs `infra/` without secrets, generated files or the local test, copies it to the VPS, lays it over `~/deploy` and runs `sudo ./setup.sh`. Files that exist only on the VPS (`.env`, certificates, `authd.pass`, generated users) are never overwritten. Use `-NoSetup` to copy only.
+This runs `git pull --ff-only` in `~/thesis` and then `sudo ./setup.sh`. Files that exist only on the VPS (`.env`, certificates, `authd.pass`, generated users, `reports/`) are git-ignored, so a pull never touches them. Use `-NoSetup` to pull only. Never edit tracked files on the VPS; change them in the repository instead.
 
 `setup.sh` takes about 10–15 minutes on first run, mostly image downloads and Nextcloud installation. It runs these steps:
 
@@ -122,7 +130,7 @@ What the local test can't show:
 
 ## Day-to-day operations
 
-Run these on the VPS from `~/deploy`. Use `sudo`, or log out and back in once so your user is in the `docker` group.
+Run these on the VPS from `~/thesis/infra`. Use `sudo`, or log out and back in once so your user is in the `docker` group.
 
 | Task | Command |
 |---|---|
@@ -172,7 +180,7 @@ Run these on the VPS from `~/deploy`. Use `sudo`, or log out and back in once so
 ## Files
 
 ```
-infra/                           (~/deploy on the VPS)
+infra/                           (~/thesis/infra on the VPS)
 ├── setup.sh                     host prep, secrets, certificates, start, verify
 ├── scripts/
 │   ├── verify-phase1.sh         PRD section 10 checks, writes reports/

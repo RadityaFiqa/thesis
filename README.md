@@ -6,7 +6,7 @@ Undergraduate thesis: collect Nextcloud user activity, detect behavioral anomali
 |---|---|
 | Nextcloud | https://nextcloud.gbb-landu.my.id |
 | Wazuh | https://wazuh.gbb-landu.my.id |
-| VPS | `ubuntu@43.173.6.37`, deployed to `~/deploy` |
+| VPS | `ubuntu@43.173.6.37`, git clone in `~/thesis`, stack runs from `~/thesis/infra` |
 
 ## Repository layout
 
@@ -27,7 +27,7 @@ Undergraduate thesis: collect Nextcloud user activity, detect behavioral anomali
 ├── config/experiments/   versioned experiment configs (windows, seeds, splits)
 ├── tools/                developer helpers run from your PC (deploy-to-vps.ps1)
 ├── data/  artifacts/     generated datasets and models (git-ignored)
-└── dist/                 build output, e.g. infra.tar.gz (git-ignored)
+└── dist/                 build output (git-ignored)
 ```
 
 Where things go:
@@ -55,8 +55,8 @@ python -m venv .venv
 | Run tests | `.venv\Scripts\pytest` |
 | Lint | `.venv\Scripts\ruff check src tests` |
 | Check layer boundaries | `.venv\Scripts\lint-imports` |
-| Deploy infra to the VPS | `.\tools\deploy-to-vps.ps1` |
-| Verify Phase 1 on the VPS | `ssh ubuntu@43.173.6.37 "cd ~/deploy && sudo ./scripts/verify-phase1.sh"` |
+| Deploy infra to the VPS (after `git push`) | `.\tools\deploy-to-vps.ps1` |
+| Verify Phase 1 on the VPS | `ssh ubuntu@43.173.6.37 "cd ~/thesis/infra && sudo ./scripts/verify-phase1.sh"` |
 | Local test stack (Docker Desktop) | `infra\local\run-local.cmd` / `infra\local\stop-local.cmd` |
 
 Operations, backup/restore and troubleshooting: [infra/README.md](infra/README.md).

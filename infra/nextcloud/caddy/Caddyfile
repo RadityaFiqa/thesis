@@ -1,0 +1,52 @@
+# Reverse proxy for both domains (PRD INF-03, CTX-03).
+# Both domains sit behind the Cloudflare proxy, so the real client IP is taken
+# from CF-Connecting-IP, but only when the connection really comes from
+# Cloudflare. Anyone else gets their socket address, so the header can't be spoofed.
+# Cloudflare ranges: https://www.cloudflare.com/ips/ (checked 2026-10-18)
+{
+	servers {
+		trusted_proxies static 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 2400:cb00::/32 2606:4700::/32 2803:f800::/32 2405:b500::/32 2405:8100::/32 2a06:98c0::/29 2c0f:f248::/32
+		client_ip_headers CF-Connecting-IP
+	}
+}
+
+{$NEXTCLOUD_DOMAIN} {
+	tls {$CADDY_TLS}
+
+	# Access log for behavioral analysis: method, URI, status, bytes, client_ip, user agent
+	log {
+		output file /var/log/caddy/access.log {
+			roll_size 100MiB
+			roll_keep 10
+		}
+		format json
+	}
+
+	header Strict-Transport-Security "max-age=31536000;"
+
+	redir /.well-known/carddav /remote.php/dav/ 301
+	redir /.well-known/caldav /remote.php/dav/ 301
+
+	reverse_proxy app:80 {
+		# Overwrite rather than append, so Nextcloud sees exactly the resolved client IP
+		header_up X-Forwarded-For {client_ip}
+		header_up X-Real-IP {client_ip}
+	}
+}
+
+{$WAZUH_DOMAIN} {
+	tls {$CADDY_TLS}
+
+	@allowed client_ip {$WAZUH_ALLOWED_CIDRS}
+	handle @allowed {
+		# Dashboard serves its own self-signed TLS on the host bridge address
+		reverse_proxy https://{$WAZUH_DASHBOARD_UPSTREAM} {
+			transport http {
+				tls_insecure_skip_verify
+			}
+		}
+	}
+	handle {
+		respond "Forbidden" 403
+	}
+}

@@ -1,0 +1,7 @@
+*/.env
+siem/config/wazuh_indexer_ssl_certs/
+siem/config/wazuh_cluster/authd.pass
+siem/config/wazuh_indexer/internal_users.yml
+siem/config/wazuh_dashboard/wazuh.yml
+nextcloud/caddy/certs/*.pem
+reports/

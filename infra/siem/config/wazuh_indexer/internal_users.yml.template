@@ -1,0 +1,58 @@
+---
+# This is the internal user database
+# The hash value is a bcrypt hash and can be generated with plugin/tools/hash.sh
+
+_meta:
+  type: "internalusers"
+  config_version: 2
+
+# Define your internal users here
+# Thesis: setup.sh fills admin/kibanaserver from siem/.env and gives every
+# other demo user a random, unrecorded password (effectively disabled).
+
+## Demo users
+
+admin:
+  hash: "__ADMIN_HASH__"
+  reserved: true
+  backend_roles:
+  - "admin"
+  description: "Demo admin user"
+
+kibanaserver:
+  hash: "__KIBANASERVER_HASH__"
+  reserved: true
+  description: "Demo kibanaserver user"
+
+kibanaro:
+  hash: "__RANDOM_HASH__"
+  reserved: false
+  backend_roles:
+  - "kibanauser"
+  - "readall"
+  attributes:
+    attribute1: "value1"
+    attribute2: "value2"
+    attribute3: "value3"
+  description: "Demo kibanaro user"
+
+logstash:
+  hash: "__RANDOM_HASH__"
+  reserved: false
+  backend_roles:
+  - "logstash"
+  description: "Demo logstash user"
+
+readall:
+  hash: "__RANDOM_HASH__"
+  reserved: false
+  backend_roles:
+  - "readall"
+  description: "Demo readall user"
+
+snapshotrestore:
+  hash: "__RANDOM_HASH__"
+  reserved: false
+  backend_roles:
+  - "snapshotrestore"
+  description: "Demo snapshotrestore user"

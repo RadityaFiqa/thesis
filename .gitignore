@@ -1,0 +1,17 @@
+# Python
+.venv/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Build output and experiment data (large, regenerable, may contain test identities)
+dist/
+data/
+artifacts/
+
+# Local test on Docker Desktop: generated secrets and transcripts
+*.env.local
+infra/local/.thesis-check.pass
+infra/local/local-test-output.txt
+# infra/.gitignore covers secrets generated on the VPS

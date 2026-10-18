@@ -1,0 +1,30 @@
+<!--
+  Thesis local rules (Phase 1 smoke rules).
+  Wazuh only indexes events that match a rule, so these level-3 rules make every
+  Nextcloud audit, application and proxy event searchable in the dashboard.
+  Phase 2 (LOG-02..LOG-05) revisits this: field mapping, archives, volume.
+-->
+<group name="nextcloud,thesis,">
+
+  <rule id="100100" level="3">
+    <decoded_as>json</decoded_as>
+    <location>/var/log/nextcloud/audit.log</location>
+    <description>Nextcloud audit: $(message)</description>
+    <group>nextcloud_audit,</group>
+  </rule>
+
+  <rule id="100101" level="3">
+    <decoded_as>json</decoded_as>
+    <location>/var/log/nextcloud/nextcloud.log</location>
+    <description>Nextcloud application: $(message)</description>
+    <group>nextcloud_app,</group>
+  </rule>
+
+  <rule id="100102" level="3">
+    <decoded_as>json</decoded_as>
+    <location>/var/log/caddy/access.log</location>
+    <description>Proxy access: $(request.method) $(request.uri) -> $(status)</description>
+    <group>nextcloud_proxy,</group>
+  </rule>
+
+</group>

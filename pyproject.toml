@@ -1,0 +1,49 @@
+[project]
+name = "ueba"
+version = "0.1.0"
+description = "Nextcloud UEBA research platform: normalization, simulation, features, Isolation Forest detection (thesis)"
+requires-python = ">=3.11"
+dependencies = []          # add per phase, pinned (PRD: reproducibility)
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+    "import-linter>=2",
+]
+
+[project.scripts]
+ueba = "ueba.entrypoints.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+
+# Clean architecture: each layer may import only the layers below it.
+#   entrypoints -> adapters -> application -> domain
+[tool.importlinter]
+root_package = "ueba"
+
+[[tool.importlinter.contracts]]
+name = "Layered architecture"
+type = "layers"
+layers = [
+    "ueba.entrypoints",
+    "ueba.adapters",
+    "ueba.application",
+    "ueba.domain",
+]

@@ -19,6 +19,7 @@ from ueba.application.normalize import NormalizeStats, correlate
 from ueba.application.quality import quality_report
 from ueba.application.trace import Expectation, trace
 from ueba.domain.events import Action, Outcome
+from ueba.entrypoints import features_cmd
 
 
 def _utc(value: str) -> datetime:
@@ -116,6 +117,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--manifest", required=True, help="sampler manifest.jsonl")
     p.add_argument("--events", required=True, help="normalized events .jsonl")
     p.set_defaults(func=cmd_trace)
+
+    features_cmd.add_parser(sub)
     return parser
 
 

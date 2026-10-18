@@ -48,7 +48,7 @@ entrypoints ──> adapters ──> application ──> domain
 |---|---|---|---|
 | 2 Collection | `events` ✅, `geo` ✅ | `normalize` ✅, `enrich_geo` ✅, `trace` ✅, `quality` ✅ | `nextcloud_logs` ✅, `wazuh_indexer` ✅, `jsonl_store` ✅, `mmdb_geo` ✅ |
 | 3 Simulation | `scenarios`, ground-truth records | `simulate` | `nextcloud_dav`, ground-truth store |
-| 4 Features | `features` (window, definitions) | `build_features` | `parquet_store` |
+| 4 Features | `features` ✅ (window, definitions) | `build_features` ✅ | `feature_store` ✅ (JSONL + manifest) |
 | 5 Model | model metadata | `train`, `calibrate` | model registry (files) |
 | 6 Integration | `detections` ✅, `risk` | `score`, checkpointing | `wazuh_detections` |
 | 7 Evaluation | metrics | `evaluate` | report export |

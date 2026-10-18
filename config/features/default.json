@@ -1,0 +1,9 @@
+{
+  "$comment": "Phase 4 feature config (decision 0010). Same events + same config = identical rows. window_minutes must divide a day; utc_offset sets local time for hour/day features (WIB, no DST).",
+  "window_minutes": 60,
+  "warmup_days": 7,
+  "utc_offset": "+07:00",
+  "rare_hour_share": 0.05,
+  "min_history_events": 20,
+  "min_history_windows": 3
+}

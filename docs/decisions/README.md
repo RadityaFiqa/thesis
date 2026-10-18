@@ -30,3 +30,4 @@ What this costs, what it enables, what to watch.
 | [0007](0007-safe-config-deploys.md) | Detect stale bind mounts and validate Wazuh rules before reloading |
 | [0008](0008-simulation-path.md) | Simulation path: injected client IP and virtual time on a local-only listener |
 | [0009](0009-dashboard-enrichment.md) | Clean thesis.* fields and GeoIP in the Wazuh dashboard |
+| [0010](0010-feature-windows.md) | User-window features: 1-hour windows, 7-day warm-up, past-only history |
